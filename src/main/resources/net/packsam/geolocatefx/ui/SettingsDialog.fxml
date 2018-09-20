@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ButtonBar?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.RowConstraints?>
+
+<BorderPane fx:id="dialogPane" prefHeight="300.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/8.0.121" xmlns:fx="http://javafx.com/fxml/1" fx:controller="net.packsam.geolocatefx.ui.SettingsDialog">
+	<center>
+		<GridPane hgap="5.0" maxHeight="1.7976931348623157E308" vgap="5.0">
+			<columnConstraints>
+				<ColumnConstraints hgrow="SOMETIMES"/>
+				<ColumnConstraints hgrow="ALWAYS" maxWidth="1.7976931348623157E308"/>
+			</columnConstraints>
+			<rowConstraints>
+				<RowConstraints vgrow="NEVER"/>
+				<RowConstraints vgrow="NEVER"/>
+				<RowConstraints vgrow="NEVER"/>
+				<RowConstraints vgrow="NEVER"/>
+				<RowConstraints maxHeight="1.7976931348623157E308" valignment="BOTTOM" vgrow="ALWAYS"/>
+			</rowConstraints>
+			<Label text="Path to exiftool:"/>
+			<Label text="Path to Image Magick convert:" GridPane.rowIndex="1"/>
+			<Label text="Google Maps API key:" GridPane.rowIndex="2"/>
+			<HBox spacing="5.0" GridPane.columnIndex="1" GridPane.hgrow="ALWAYS" GridPane.vgrow="NEVER">
+				<TextField fx:id="exiftoolTF" HBox.hgrow="ALWAYS">
+					<HBox.margin>
+						<Insets/>
+					</HBox.margin>
+				</TextField>
+				<Button mnemonicParsing="false" text="Search..." onAction="#selectExiftool">
+					<HBox.margin>
+						<Insets/>
+					</HBox.margin>
+				</Button>
+			</HBox>
+			<HBox spacing="5.0" GridPane.columnIndex="1" GridPane.hgrow="ALWAYS" GridPane.rowIndex="1" GridPane.vgrow="NEVER">
+				<TextField fx:id="convertTF" HBox.hgrow="ALWAYS">
+					<HBox.margin>
+						<Insets/>
+					</HBox.margin>
+				</TextField>
+				<Button mnemonicParsing="false" text="Search..." onAction="#selectConvert">
+					<HBox.margin>
+						<Insets/>
+					</HBox.margin>
+				</Button>
+			</HBox>
+			<TextField fx:id="googleMapsApiKeyTF" GridPane.columnIndex="1" GridPane.hgrow="ALWAYS" GridPane.rowIndex="2" GridPane.vgrow="NEVER">
+				<GridPane.margin>
+					<Insets/>
+				</GridPane.margin>
+			</TextField>
+		</GridPane>
+	</center>
+	<bottom>
+		<ButtonBar>
+			<buttons>
+				<Button defaultButton="true" mnemonicParsing="false" text="OK" onAction="#save"/>
+				<Button cancelButton="true" mnemonicParsing="false" text="Cancel" onAction="#cancel"/>
+			</buttons>
+			<opaqueInsets>
+				<Insets />
+			</opaqueInsets>
+			<GridPane.margin>
+				<Insets />
+			</GridPane.margin>
+		</ButtonBar>
+	</bottom>
+   <padding>
+      <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
+   </padding>
+</BorderPane>
