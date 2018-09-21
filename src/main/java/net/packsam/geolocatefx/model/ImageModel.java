@@ -32,6 +32,16 @@ public class ImageModel {
 	 */
 	private final ObjectProperty<Date> creationDate = new SimpleObjectProperty<>(null);
 
+	/**
+	 * Property for the video duration.
+	 */
+	private final ObjectProperty<Double> duration = new SimpleObjectProperty<>(null);
+
+	/**
+	 * Property for the video frame rate.
+	 */
+	private final ObjectProperty<Double> videoFrameRate = new SimpleObjectProperty<>(null);
+
 	public File getImage() {
 		return image.get();
 	}
@@ -78,5 +88,29 @@ public class ImageModel {
 
 	public void setCreationDate(Date creationDate) {
 		this.creationDate.set(creationDate);
+	}
+
+	public Double getDuration() {
+		return duration.get();
+	}
+
+	public ObjectProperty<Double> durationProperty() {
+		return duration;
+	}
+
+	public void setDuration(Double duration) {
+		this.duration.set(duration);
+	}
+
+	public Double getVideoFrameRate() {
+		return videoFrameRate.get();
+	}
+
+	public ObjectProperty<Double> videoFrameRateProperty() {
+		return videoFrameRate;
+	}
+
+	public void setVideoFrameRate(Double videoFrameRate) {
+		this.videoFrameRate.set(videoFrameRate);
 	}
 }

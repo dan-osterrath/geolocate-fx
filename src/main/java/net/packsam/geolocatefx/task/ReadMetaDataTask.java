@@ -22,7 +22,7 @@ import net.packsam.geolocatefx.model.LatLong;
  *
  * @author osterrath
  */
-public class ReadGeolocationTask extends Task<LatLong> {
+public class ReadMetaDataTask extends Task<Void> {
 
 	/**
 	 * Pattern for searching latitude.
@@ -45,6 +45,21 @@ public class ReadGeolocationTask extends Task<LatLong> {
 	private final static Pattern CREATION_DATE_PATTERN = Pattern.compile("^CreateDate:\\s+(.+)$");
 
 	/**
+	 * Pattern for searching the video duration.
+	 */
+	private final static Pattern DURATION_PATTERN_1 = Pattern.compile("^Duration:\\s+(.+) s$");
+
+	/**
+	 * Pattern for searching the video duration.
+	 */
+	private final static Pattern DURATION_PATTERN_2 = Pattern.compile("^Duration:\\s+(.+)$");
+
+	/**
+	 * Pattern for searching the video frame rate.
+	 */
+	private final static Pattern VIDEO_FRAME_RATE_PATTERN = Pattern.compile("^VideoFrameRate:\\s+(.+)$");
+
+	/**
 	 * Pattern for parsing degrees.
 	 */
 	private final static Pattern DEGREES_PATTERN = Pattern.compile("^(\\d+)\\s+deg\\s+(\\d+)'\\s+(\\d+\\.\\d+)\"\\s+(.)");
@@ -53,6 +68,11 @@ public class ReadGeolocationTask extends Task<LatLong> {
 	 * Date format for parsing date time.
 	 */
 	private final static DateFormat DF = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss");
+
+	/**
+	 * Pattern for parsing a time.
+	 */
+	private final static Pattern TIME_PATTERN = Pattern.compile("^(\\d+):(\\d+):(\\d+(\\.\\d+)?)");
 
 	/**
 	 * Path to exiftool.
@@ -65,6 +85,11 @@ public class ReadGeolocationTask extends Task<LatLong> {
 	private final ImageModel imageModel;
 
 	/**
+	 * Callback when data has been parsed.
+	 */
+	private final Callback callback;
+
+	/**
 	 * Ctor.
 	 *
 	 * @param exiftoolPath
@@ -72,9 +97,24 @@ public class ReadGeolocationTask extends Task<LatLong> {
 	 * @param imageModel
 	 * 		target image model
 	 */
-	public ReadGeolocationTask(String exiftoolPath, ImageModel imageModel) {
+	public ReadMetaDataTask(String exiftoolPath, ImageModel imageModel) {
+		this(exiftoolPath, imageModel, null);
+	}
+
+	/**
+	 * Ctor.
+	 *
+	 * @param exiftoolPath
+	 * 		path to exiftool
+	 * @param imageModel
+	 * 		target image model
+	 * @param callback
+	 * 		callback for saving parsed data
+	 */
+	public ReadMetaDataTask(String exiftoolPath, ImageModel imageModel, Callback callback) {
 		this.exiftoolPath = exiftoolPath;
 		this.imageModel = imageModel;
+		this.callback = callback;
 	}
 
 	/**
@@ -87,7 +127,7 @@ public class ReadGeolocationTask extends Task<LatLong> {
 	 * 		an unhandled exception which occurred during the background operation
 	 */
 	@Override
-	protected LatLong call() throws Exception {
+	protected Void call() throws Exception {
 		File imageFile = imageModel.getImage();
 
 		// call exiftool
@@ -98,6 +138,8 @@ public class ReadGeolocationTask extends Task<LatLong> {
 				"-gpslatitude",
 				"-gpslongitude",
 				"-alldates",
+				"-duration",
+				"-videoframerate",
 				imageFile.getAbsolutePath()
 		);
 		Process process = processBuilder.start();
@@ -112,6 +154,8 @@ public class ReadGeolocationTask extends Task<LatLong> {
 		Double longitude = null;
 		Date creationDateOriginal = null;
 		Date creationDate = null;
+		Double duration = null;
+		Double videoFrameRate = null;
 		try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
 			String line;
 			while ((line = br.readLine()) != null) {
@@ -128,20 +172,34 @@ public class ReadGeolocationTask extends Task<LatLong> {
 				} else if ((m = CREATION_DATE_PATTERN.matcher(line)).matches()) {
 					// parse creation date
 					creationDate = parseDateTime(m.group(1));
+				} else if ((m = DURATION_PATTERN_1.matcher(line)).matches()) {
+					// parse duration
+					duration = parseDouble(m.group(1));
+				} else if ((m = DURATION_PATTERN_2.matcher(line)).matches()) {
+					// parse duration
+					duration = parseTime(m.group(1));
+				} else if ((m = VIDEO_FRAME_RATE_PATTERN.matcher(line)).matches()) {
+					// parse video frame rate
+					videoFrameRate = parseDouble(m.group(1));
 				}
 			}
 		}
-		if (latitude == null || longitude == null) {
-			return null;
-		}
 
-		LatLong geolocation = new LatLong(latitude, longitude);
+		LatLong finalGeolocation = latitude != null && longitude != null ? new LatLong(latitude, longitude) : null;
 		Date finalCreationDate = creationDateOriginal != null ? creationDateOriginal : creationDate;
-		Platform.runLater(() -> {
-			imageModel.setGeolocation(geolocation);
-			imageModel.setCreationDate(finalCreationDate);
-		});
-		return geolocation;
+		Double finalDuration = duration;
+		Double finalVideoFrameRate = videoFrameRate;
+		if (callback == null) {
+			Platform.runLater(() -> {
+				imageModel.setGeolocation(finalGeolocation);
+				imageModel.setCreationDate(finalCreationDate);
+				imageModel.setDuration(finalDuration);
+				imageModel.setVideoFrameRate(finalVideoFrameRate);
+			});
+		} else {
+			callback.handleMetaData(finalGeolocation, finalCreationDate, finalDuration, finalVideoFrameRate);
+		}
+		return null;
 	}
 
 	/**
@@ -156,30 +214,62 @@ public class ReadGeolocationTask extends Task<LatLong> {
 	 * @return parsed numeric degrees
 	 */
 	private Double parseDegrees(String degrees, String positiveDirection, String negativeDirection) {
-		Matcher m = DEGREES_PATTERN.matcher(degrees);
-		if (!m.matches()) {
+		try {
+			Matcher m = DEGREES_PATTERN.matcher(degrees);
+			if (!m.matches()) {
+				return null;
+			}
+
+			String degreesS = m.group(1);
+			String minutesS = m.group(2);
+			String secondsS = m.group(3);
+			String suffix = m.group(4);
+
+			int sig;
+			if (StringUtils.equalsIgnoreCase(suffix, positiveDirection)) {
+				sig = 1;
+			} else if (StringUtils.equalsIgnoreCase(suffix, negativeDirection)) {
+				sig = -1;
+			} else {
+				return null;
+			}
+
+			double degreesD = Integer.parseInt(degreesS, 10);
+			double minutesD = Integer.parseInt(minutesS, 10);
+			double secondsD = Double.parseDouble(secondsS);
+
+			return sig * (degreesD + (minutesD / 60) + (secondsD / 3600));
+		} catch (NumberFormatException e) {
 			return null;
 		}
+	}
 
-		String degreesS = m.group(1);
-		String minutesS = m.group(2);
-		String secondsS = m.group(3);
-		String suffix = m.group(4);
+	/**
+	 * Tries to parse the given time string.
+	 *
+	 * @param time
+	 * 		time string
+	 * @return parsed time in seconds
+	 */
+	private Double parseTime(String time) {
+		try {
+			Matcher m = TIME_PATTERN.matcher(time);
+			if (!m.matches()) {
+				return null;
+			}
 
-		int sig;
-		if (StringUtils.equalsIgnoreCase(suffix, positiveDirection)) {
-			sig = 1;
-		} else if (StringUtils.equalsIgnoreCase(suffix, negativeDirection)) {
-			sig = -1;
-		} else {
+			String hoursS = m.group(1);
+			String minutesS = m.group(2);
+			String secondsS = m.group(3);
+
+			double hoursD = Integer.parseInt(hoursS, 10);
+			double minutesD = Integer.parseInt(minutesS, 10);
+			double secondsD = Double.parseDouble(secondsS);
+
+			return secondsD + minutesD * 60 + hoursD * 3600;
+		} catch (NumberFormatException e) {
 			return null;
 		}
-
-		double degreesD = Integer.parseInt(degreesS, 10);
-		double minutesD = Integer.parseInt(minutesS, 10);
-		double secondsD = Double.parseDouble(secondsS);
-
-		return sig * (degreesD + (minutesD / 60) + (secondsD / 3600));
 	}
 
 	/**
@@ -195,6 +285,43 @@ public class ReadGeolocationTask extends Task<LatLong> {
 		} catch (ParseException e) {
 			return null;
 		}
+	}
+
+	/**
+	 * Parses the given double value.
+	 *
+	 * @param val
+	 * 		double value string
+	 * @return parsed double
+	 */
+	private Double parseDouble(String val) {
+		try {
+			return Double.parseDouble(val);
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
+
+	/**
+	 * Functional interface for the callback to save all data.
+	 *
+	 * @author osterrath
+	 */
+	@FunctionalInterface
+	public interface Callback {
+		/**
+		 * Saves the parsed meta data.
+		 *
+		 * @param geolocation
+		 * 		geolocation
+		 * @param creationDate
+		 * 		creation date
+		 * @param duration
+		 * 		video duration
+		 * @param videoFrameRate
+		 * 		video frame rate
+		 */
+		void handleMetaData(LatLong geolocation, Date creationDate, Double duration, Double videoFrameRate);
 	}
 
 }

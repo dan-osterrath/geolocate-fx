@@ -6,6 +6,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import javafx.application.Application;
@@ -28,7 +29,8 @@ import net.packsam.geolocatefx.model.ApplicationModel;
 import net.packsam.geolocatefx.model.ImageModel;
 import net.packsam.geolocatefx.model.LatLong;
 import net.packsam.geolocatefx.task.CreateThumbnailTask;
-import net.packsam.geolocatefx.task.ReadGeolocationTask;
+import net.packsam.geolocatefx.task.ReadMetaDataAndCreateThumbnailTask;
+import net.packsam.geolocatefx.task.ReadMetaDataTask;
 import net.packsam.geolocatefx.task.WriteGeolocationTask;
 import net.packsam.geolocatefx.ui.ApplicationLayout;
 import net.packsam.geolocatefx.ui.ErrorAlert;
@@ -201,7 +203,7 @@ public class GeolocateFx extends Application {
 			dialog.setInitialDirectory(new File(configuration.getLastImagePath()));
 		}
 		dialog.getExtensionFilters().addAll(
-				new FileChooser.ExtensionFilter("All images", "*.jpg; *.jpeg; *.png; *.tif; *.tiff; *.dng; *.raw; *.cr2; *.cr3; *.nef; *.nrw; *.arw; *.srf; *.sr2; *.srw; *.psd"),
+				new FileChooser.ExtensionFilter("All images / videos", "*.jpg; *.jpeg; *.png; *.tif; *.tiff; *.dng; *.raw; *.cr2; *.cr3; *.nef; *.nrw; *.arw; *.srf; *.sr2; *.srw; *.psd; *.mp4; *.mov; *.m2ts; *.avi"),
 				new FileChooser.ExtensionFilter("JPEG images", "*.jpg; *.jpeg"),
 				new FileChooser.ExtensionFilter("PNG images", "*.png"),
 				new FileChooser.ExtensionFilter("TIFF images", "*.tif; *.tiff"),
@@ -210,6 +212,7 @@ public class GeolocateFx extends Application {
 				new FileChooser.ExtensionFilter("Sony RAW images", "*.arw; *.srf; *.sr2"),
 				new FileChooser.ExtensionFilter("Samsung RAW images", "*.raw; *.srw"),
 				new FileChooser.ExtensionFilter("Adobe Photoshop images", "*.psd"),
+				new FileChooser.ExtensionFilter("Videos", "*.mp4; *.mov; *.m2ts; *.avi"),
 				new FileChooser.ExtensionFilter("All files", "*.*")
 		);
 		List<File> files = dialog.showOpenMultipleDialog(primaryStage);
@@ -259,10 +262,19 @@ public class GeolocateFx extends Application {
 			return;
 		}
 
+		// check if this is a video
+		String extension = FilenameUtils.getExtension(imageFile.getName());
+		boolean isVideo = StringUtils.equalsAnyIgnoreCase(extension, "mp4", "mov", "m2ts", "avi");
+
 		ImageModel imageModel = new ImageModel();
 		imageModel.setImage(imageFile);
-		es.submit(new CreateThumbnailTask(configuration.getConvertPath(), imageModel));
-		es.submit(new ReadGeolocationTask(configuration.getExiftoolPath(), imageModel));
+
+		if (isVideo) {
+			es.submit(new ReadMetaDataAndCreateThumbnailTask(configuration.getExiftoolPath(), configuration.getConvertPath(), imageModel));
+		} else {
+			es.submit(new CreateThumbnailTask(configuration.getConvertPath(), imageModel));
+			es.submit(new ReadMetaDataTask(configuration.getExiftoolPath(), imageModel));
+		}
 
 		selectedImages.add(imageModel);
 	}

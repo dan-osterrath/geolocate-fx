@@ -15,7 +15,7 @@ import net.packsam.geolocatefx.model.ImageModel;
  *
  * @author osterrath
  */
-public class CreateThumbnailTask extends Task<File> {
+public class CreateThumbnailTask extends Task<Void> {
 
 	/**
 	 * Size parameter for convert -resize.
@@ -33,6 +33,11 @@ public class CreateThumbnailTask extends Task<File> {
 	private final ImageModel imageModel;
 
 	/**
+	 * Callback when the thumbnail has been created.
+	 */
+	private final Callback callback;
+
+	/**
 	 * Ctor.
 	 *
 	 * @param convertPath
@@ -41,8 +46,23 @@ public class CreateThumbnailTask extends Task<File> {
 	 * 		target image model
 	 */
 	public CreateThumbnailTask(String convertPath, ImageModel imageModel) {
+		this(convertPath, imageModel, null);
+	}
+
+	/**
+	 * Ctor.
+	 *
+	 * @param convertPath
+	 * 		path to Image Magick convert
+	 * @param imageModel
+	 * 		target image model
+	 * @param callback
+	 * 		callback when the thumbnail has been created
+	 */
+	public CreateThumbnailTask(String convertPath, ImageModel imageModel, Callback callback) {
 		this.convertPath = convertPath;
 		this.imageModel = imageModel;
+		this.callback = callback;
 	}
 
 	/**
@@ -55,7 +75,7 @@ public class CreateThumbnailTask extends Task<File> {
 	 * 		an unhandled exception which occurred during the background operation
 	 */
 	@Override
-	protected File call() throws Exception {
+	protected Void call() throws Exception {
 		File imageFile = imageModel.getImage();
 		File thumbnailFile = getThumbnailFile(imageFile);
 
@@ -65,11 +85,18 @@ public class CreateThumbnailTask extends Task<File> {
 				thumbnailFile.delete();
 			}
 
+			String filename = imageFile.getAbsolutePath();
+			if (imageModel.getDuration() != null && imageModel.getDuration() > 0 && imageModel.getVideoFrameRate() != null && imageModel.getVideoFrameRate() > 0) {
+				// this seems to be a video, use frame in the middle of video
+				int totalFrames = (int) (imageModel.getDuration() * imageModel.getVideoFrameRate());
+				filename += "[" + (totalFrames >> 1) + "]";
+			}
+
 			// call convert
 			String convert = StringUtils.isNotEmpty(convertPath) ? convertPath : "convert";
 			ProcessBuilder processBuilder = new ProcessBuilder(
 					convert,
-					imageFile.getAbsolutePath(),
+					filename,
 					"-background", "white",
 					"-flatten",
 					"-thumbnail", RESIZE_DIMENSIONS_PARAM,
@@ -84,10 +111,14 @@ public class CreateThumbnailTask extends Task<File> {
 			}
 		}
 
-		Platform.runLater(() -> {
-			imageModel.setThumbnail(thumbnailFile);
-		});
-		return thumbnailFile;
+		if (callback == null) {
+			Platform.runLater(() -> {
+				imageModel.setThumbnail(thumbnailFile);
+			});
+		} else {
+			callback.handleThumbnailFile(thumbnailFile);
+		}
+		return null;
 	}
 
 	/**
@@ -109,4 +140,21 @@ public class CreateThumbnailTask extends Task<File> {
 		thumbname.append(".thumb");
 		return new File(parent, thumbname.toString());
 	}
+
+	/**
+	 * Functional interface for the callback to save all data.
+	 *
+	 * @author osterrath
+	 */
+	@FunctionalInterface
+	public interface Callback {
+		/**
+		 * Saves the thumbnail file.
+		 *
+		 * @param thumbnailFile
+		 * 		created thumbnail file
+		 */
+		void handleThumbnailFile(File thumbnailFile);
+	}
+
 }
