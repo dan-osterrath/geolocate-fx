@@ -2,8 +2,6 @@ package net.packsam.geolocatefx.config;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -67,13 +65,6 @@ public class ConfigurationIO {
 			marshaller.marshal(cfg, cfgFile);
 		} catch (JAXBException e) {
 			throw new IOException("Could not write configuration file", e);
-		}
-
-		// make file hidden
-		try {
-			Files.setAttribute(cfgFile.toPath(), "dos:hidden", Boolean.TRUE, LinkOption.NOFOLLOW_LINKS);
-		} catch (IOException e) {
-			// ignore errors
 		}
 	}
 

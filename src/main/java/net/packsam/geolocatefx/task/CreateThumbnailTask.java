@@ -1,9 +1,6 @@
 package net.packsam.geolocatefx.task;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -84,13 +81,6 @@ public class CreateThumbnailTask extends Task<File> {
 
 			if (returnValue != 0) {
 				return null;
-			}
-
-			// make file hidden
-			try {
-				Files.setAttribute(thumbnailFile.toPath(), "dos:hidden", Boolean.TRUE, LinkOption.NOFOLLOW_LINKS);
-			} catch (IOException e) {
-				// ignore errors
 			}
 		}
 
