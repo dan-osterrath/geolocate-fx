@@ -68,7 +68,7 @@ public class ImageThumbnail extends AnchorPane {
 		super();
 		this.imageModel = imageModel;
 
-		imageView = new ImageView();
+		imageView = new ImageView(NO_IMAGE);
 		imageView.setPreserveRatio(true);
 		imageView.setFitWidth(Constants.THUMBNAIL_WIDTH);
 		imageView.setOnDragOver(this::dragOverImage);
