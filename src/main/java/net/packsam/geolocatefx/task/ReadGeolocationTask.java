@@ -27,17 +27,22 @@ public class ReadGeolocationTask extends Task<LatLong> {
 	/**
 	 * Pattern for searching latitude.
 	 */
-	private final static Pattern LATITUDE_PATTERN = Pattern.compile("^GPS Latitude\\s+:\\s+(.+)$");
+	private final static Pattern LATITUDE_PATTERN = Pattern.compile("^GPSLatitude:\\s+(.+)$");
 
 	/**
 	 * Pattern for searching longitude.
 	 */
-	private final static Pattern LONGITUDE_PATTERN = Pattern.compile("^GPS Longitude\\s+:\\s+(.+)$");
+	private final static Pattern LONGITUDE_PATTERN = Pattern.compile("^GPSLongitude:\\s+(.+)$");
+
+	/**
+	 * Pattern for searching the original creation date.
+	 */
+	private final static Pattern CREATION_DATE_ORIGINAL_PATTERN = Pattern.compile("^DateTimeOriginal:\\s+(.+)$");
 
 	/**
 	 * Pattern for searching the creation date.
 	 */
-	private final static Pattern CREATION_DATE_PATTERN = Pattern.compile("^Date/Time Original\\s+:\\s+(.+)$");
+	private final static Pattern CREATION_DATE_PATTERN = Pattern.compile("^CreateDate:\\s+(.+)$");
 
 	/**
 	 * Pattern for parsing degrees.
@@ -89,9 +94,10 @@ public class ReadGeolocationTask extends Task<LatLong> {
 		String exiftool = StringUtils.isNotEmpty(exiftoolPath) ? exiftoolPath : "exiftool";
 		ProcessBuilder processBuilder = new ProcessBuilder(
 				exiftool,
+				"-S",
 				"-gpslatitude",
 				"-gpslongitude",
-				"-datetimeoriginal",
+				"-alldates",
 				imageFile.getAbsolutePath()
 		);
 		Process process = processBuilder.start();
@@ -104,6 +110,7 @@ public class ReadGeolocationTask extends Task<LatLong> {
 		// parse output
 		Double latitude = null;
 		Double longitude = null;
+		Date creationDateOriginal = null;
 		Date creationDate = null;
 		try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
 			String line;
@@ -115,6 +122,9 @@ public class ReadGeolocationTask extends Task<LatLong> {
 				} else if ((m = LONGITUDE_PATTERN.matcher(line)).matches()) {
 					// parse longitude
 					longitude = parseDegrees(m.group(1), "E", "W");
+				} else if ((m = CREATION_DATE_ORIGINAL_PATTERN.matcher(line)).matches()) {
+					// parse original creation date
+					creationDateOriginal = parseDateTime(m.group(1));
 				} else if ((m = CREATION_DATE_PATTERN.matcher(line)).matches()) {
 					// parse creation date
 					creationDate = parseDateTime(m.group(1));
@@ -126,7 +136,7 @@ public class ReadGeolocationTask extends Task<LatLong> {
 		}
 
 		LatLong geolocation = new LatLong(latitude, longitude);
-		Date finalCreationDate = creationDate;
+		Date finalCreationDate = creationDateOriginal != null ? creationDateOriginal : creationDate;
 		Platform.runLater(() -> {
 			imageModel.setGeolocation(geolocation);
 			imageModel.setCreationDate(finalCreationDate);
