@@ -3,6 +3,10 @@ package net.packsam.geolocatefx.task;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -31,9 +35,19 @@ public class ReadGeolocationTask extends Task<LatLong> {
 	private final static Pattern LONGITUDE_PATTERN = Pattern.compile("^GPS Longitude\\s+:\\s+(.+)$");
 
 	/**
+	 * Pattern for searching the creation date.
+	 */
+	private final static Pattern CREATION_DATE_PATTERN = Pattern.compile("^Date/Time Original\\s+:\\s+(.+)$");
+
+	/**
 	 * Pattern for parsing degrees.
 	 */
 	private final static Pattern DEGREES_PATTERN = Pattern.compile("^(\\d+)\\s+deg\\s+(\\d+)'\\s+(\\d+\\.\\d+)\"\\s+(.)");
+
+	/**
+	 * Date format for parsing date time.
+	 */
+	private final static DateFormat DF = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss");
 
 	/**
 	 * Path to exiftool.
@@ -77,6 +91,7 @@ public class ReadGeolocationTask extends Task<LatLong> {
 				exiftool,
 				"-gpslatitude",
 				"-gpslongitude",
+				"-datetimeoriginal",
 				imageFile.getAbsolutePath()
 		);
 		Process process = processBuilder.start();
@@ -89,6 +104,7 @@ public class ReadGeolocationTask extends Task<LatLong> {
 		// parse output
 		Double latitude = null;
 		Double longitude = null;
+		Date creationDate = null;
 		try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
 			String line;
 			while ((line = br.readLine()) != null) {
@@ -99,6 +115,9 @@ public class ReadGeolocationTask extends Task<LatLong> {
 				} else if ((m = LONGITUDE_PATTERN.matcher(line)).matches()) {
 					// parse longitude
 					longitude = parseDegrees(m.group(1), "E", "W");
+				} else if ((m = CREATION_DATE_PATTERN.matcher(line)).matches()) {
+					// parse creation date
+					creationDate = parseDateTime(m.group(1));
 				}
 			}
 		}
@@ -107,8 +126,10 @@ public class ReadGeolocationTask extends Task<LatLong> {
 		}
 
 		LatLong geolocation = new LatLong(latitude, longitude);
+		Date finalCreationDate = creationDate;
 		Platform.runLater(() -> {
 			imageModel.setGeolocation(geolocation);
+			imageModel.setCreationDate(finalCreationDate);
 		});
 		return geolocation;
 	}
@@ -148,7 +169,22 @@ public class ReadGeolocationTask extends Task<LatLong> {
 		double minutesD = Integer.parseInt(minutesS, 10);
 		double secondsD = Double.parseDouble(secondsS);
 
-		double ret = sig * (degreesD + (minutesD / 60) + (secondsD / 3600));
-		return ret;
+		return sig * (degreesD + (minutesD / 60) + (secondsD / 3600));
 	}
+
+	/**
+	 * Parses the given EXIF date string.
+	 *
+	 * @param dateString
+	 * 		date string
+	 * @return date
+	 */
+	private Date parseDateTime(String dateString) {
+		try {
+			return DF.parse(dateString);
+		} catch (ParseException e) {
+			return null;
+		}
+	}
+
 }

@@ -2,6 +2,8 @@ package net.packsam.geolocatefx.ui;
 
 import java.io.File;
 import java.net.MalformedURLException;
+import java.text.DateFormat;
+import java.util.Date;
 import java.util.List;
 
 import javafx.beans.value.ObservableValue;
@@ -30,6 +32,11 @@ public class ImageThumbnail extends AnchorPane {
 	 * Dummy image when there is no thumbnail image available.
 	 */
 	private final static Image NO_IMAGE = new Image(ImageThumbnail.class.getResource("no-image.png").toExternalForm());
+
+	/**
+	 * Date format for parsing date time.
+	 */
+	private final static DateFormat DF = DateFormat.getDateTimeInstance(DateFormat.DEFAULT, DateFormat.DEFAULT);
 
 	/**
 	 * Image model.
@@ -71,10 +78,11 @@ public class ImageThumbnail extends AnchorPane {
 		tooltip = new Tooltip();
 		Tooltip.install(imageView, tooltip);
 
-		imageModel.imageProperty().addListener(this::updateTooltip);
+		imageModel.imageProperty().addListener(o -> updateTooltip());
+		imageModel.creationDateProperty().addListener(o -> updateTooltip());
 		imageModel.thumbnailProperty().addListener(this::updateImage);
 		imageModel.geolocationProperty().addListener(this::updateGeolocation);
-		updateTooltip(imageModel.imageProperty(), null, imageModel.getImage());
+		updateTooltip();
 		updateImage(imageModel.thumbnailProperty(), null, imageModel.getThumbnail());
 		updateGeolocation(imageModel.geolocationProperty(), null, imageModel.getGeolocation());
 	}
@@ -114,22 +122,28 @@ public class ImageThumbnail extends AnchorPane {
 	}
 
 	/**
-	 * Event handler when the thumbnail image has been changed.
-	 *
-	 * @param property
-	 * 		observable property
-	 * @param oldVal
-	 * 		old value
-	 * @param newVal
-	 * 		new value
+	 * Event handler when the tooltip info have been changed
 	 */
-	private void updateTooltip(ObservableValue<? extends File> property, File oldVal, File newVal) {
-		if (oldVal == newVal) {
-			return;
+	private void updateTooltip() {
+		File image = imageModel.getImage();
+		Date creationDate = imageModel.getCreationDate();
+
+		StringBuilder sb = new StringBuilder();
+		if (image != null) {
+			if (sb.length() > 0) {
+				sb.append("\n");
+			}
+			sb.append(image.getAbsolutePath());
+		}
+		if (creationDate != null) {
+			if (sb.length() > 0) {
+				sb.append("\n");
+			}
+			sb.append(DF.format(creationDate));
 		}
 
-		if (newVal != null) {
-			tooltip.setText(newVal.getAbsolutePath());
+		if (sb.length() > 0) {
+			tooltip.setText(sb.toString());
 		} else {
 			tooltip.setText(null);
 		}

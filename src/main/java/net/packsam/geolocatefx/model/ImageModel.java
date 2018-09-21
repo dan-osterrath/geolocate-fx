@@ -1,6 +1,7 @@
 package net.packsam.geolocatefx.model;
 
 import java.io.File;
+import java.util.Date;
 
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
@@ -25,6 +26,11 @@ public class ImageModel {
 	 * Property for the image geolocation.
 	 */
 	private final ObjectProperty<LatLong> geolocation = new SimpleObjectProperty<>(null);
+
+	/**
+	 * Property for the image creation date.
+	 */
+	private final ObjectProperty<Date> creationDate = new SimpleObjectProperty<>(null);
 
 	public File getImage() {
 		return image.get();
@@ -60,5 +66,17 @@ public class ImageModel {
 
 	public void setGeolocation(LatLong geolocation) {
 		this.geolocation.set(geolocation);
+	}
+
+	public Date getCreationDate() {
+		return creationDate.get();
+	}
+
+	public ObjectProperty<Date> creationDateProperty() {
+		return creationDate;
+	}
+
+	public void setCreationDate(Date creationDate) {
+		this.creationDate.set(creationDate);
 	}
 }
