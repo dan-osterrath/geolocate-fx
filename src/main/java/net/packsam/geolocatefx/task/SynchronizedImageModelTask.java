@@ -23,6 +23,7 @@ abstract class SynchronizedImageModelTask<V> extends Task<V> {
 			if (imageModel.isFileInProgress()) {
 				imageModel.wait();
 			}
+			imageModel.setFileInProgress(true);
 		}
 	}
 

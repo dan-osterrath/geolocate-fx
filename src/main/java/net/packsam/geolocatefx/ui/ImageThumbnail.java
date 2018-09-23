@@ -6,6 +6,11 @@ import java.text.DateFormat;
 import java.util.Date;
 import java.util.List;
 
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
+import javafx.application.Platform;
 import javafx.beans.value.ObservableValue;
 import javafx.event.EventHandler;
 import javafx.fxml.FXML;
@@ -16,6 +21,8 @@ import javafx.scene.input.DragEvent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.AnchorPane;
+import javafx.scene.transform.Rotate;
+import javafx.util.Duration;
 import net.packsam.geolocatefx.Constants;
 import net.packsam.geolocatefx.event.SetGeolocationEvent;
 import net.packsam.geolocatefx.model.DragDropDataFormat;
@@ -34,6 +41,11 @@ public class ImageThumbnail extends AnchorPane {
 	private final static Image NO_IMAGE = new Image(ImageThumbnail.class.getResource("no-image.png").toExternalForm());
 
 	/**
+	 * Spinner image.
+	 */
+	private final static Image SPINNER = new Image(ImageThumbnail.class.getResource("spinner.png").toExternalForm());
+
+	/**
 	 * Date format for parsing date time.
 	 */
 	private final static DateFormat DF = DateFormat.getDateTimeInstance(DateFormat.DEFAULT, DateFormat.DEFAULT);
@@ -47,6 +59,16 @@ public class ImageThumbnail extends AnchorPane {
 	 * Thumbnail image view.
 	 */
 	private final ImageView imageView;
+
+	/**
+	 * Loader animation image view.
+	 */
+	private final ImageView loader;
+
+	/**
+	 * Loader animation timeline.
+	 */
+	private final Timeline loaderAnimation;
 
 	/**
 	 * Tooltip.
@@ -75,6 +97,25 @@ public class ImageThumbnail extends AnchorPane {
 		imageView.setOnDragDropped(this::dragDroppedOnImage);
 		getChildren().add(imageView);
 
+		loader = new ImageView(SPINNER);
+		loader.setMouseTransparent(true);
+		getChildren().add(loader);
+		AnchorPane.setBottomAnchor(loader, 0.0);
+		AnchorPane.setRightAnchor(loader, 0.0);
+
+		Rotate rotation = new Rotate(0, SPINNER.getWidth() / 2, SPINNER.getHeight() / 2);
+		loader.getTransforms().add(rotation);
+		loaderAnimation = new Timeline();
+		loaderAnimation.getKeyFrames().add(new KeyFrame(
+				Duration.seconds(1),
+				new KeyValue(
+						rotation.angleProperty(),
+						360
+				)
+		));
+		loaderAnimation.setCycleCount(Animation.INDEFINITE);
+		loader.setVisible(false);
+
 		tooltip = new Tooltip();
 		Tooltip.install(imageView, tooltip);
 
@@ -82,9 +123,11 @@ public class ImageThumbnail extends AnchorPane {
 		imageModel.creationDateProperty().addListener(o -> updateTooltip());
 		imageModel.thumbnailProperty().addListener(this::updateImage);
 		imageModel.geolocationProperty().addListener(this::updateGeolocation);
+		imageModel.fileInProgressProperty().addListener(this::updateFileInProgress);
 		updateTooltip();
 		updateImage(imageModel.thumbnailProperty(), null, imageModel.getThumbnail());
 		updateGeolocation(imageModel.geolocationProperty(), null, imageModel.getGeolocation());
+		updateFileInProgress(imageModel.fileInProgressProperty(), false, imageModel.isFileInProgress());
 	}
 
 	/**
@@ -193,6 +236,44 @@ public class ImageThumbnail extends AnchorPane {
 		} else {
 			imageView.setOpacity(1.0);
 		}
+	}
+
+	/**
+	 * Event handler when the "file in progress" flag has been changed.
+	 *
+	 * @param property
+	 * 		observable property
+	 * @param oldVal
+	 * 		old value
+	 * @param newVal
+	 * 		new value
+	 */
+	private void updateFileInProgress(ObservableValue<? extends Boolean> property, boolean oldVal, boolean newVal) {
+		if (oldVal == newVal) {
+			return;
+		}
+
+		if (newVal) {
+			Platform.runLater(this::showLoader);
+		} else {
+			Platform.runLater(this::hideLoader);
+		}
+	}
+
+	/**
+	 * Shows the loader animation.
+	 */
+	private void showLoader() {
+		loader.setVisible(true);
+		loaderAnimation.play();
+	}
+
+	/**
+	 * Hides the loader animation.
+	 */
+	private void hideLoader() {
+		loader.setVisible(false);
+		loaderAnimation.pause();
 	}
 
 	/**

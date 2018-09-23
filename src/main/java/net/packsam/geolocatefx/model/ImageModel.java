@@ -3,7 +3,9 @@ package net.packsam.geolocatefx.model;
 import java.io.File;
 import java.util.Date;
 
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleObjectProperty;
 
 /**
@@ -13,9 +15,9 @@ import javafx.beans.property.SimpleObjectProperty;
  */
 public class ImageModel {
 	/**
-	 * Flag if a current process is using this file.
+	 * Property for the flag if a current process is using this file.
 	 */
-	private boolean fileInProgress = false;
+	private final BooleanProperty fileInProgress = new SimpleBooleanProperty(false);
 
 	/**
 	 * Property for the (raw) image file.
@@ -47,23 +49,16 @@ public class ImageModel {
 	 */
 	private final ObjectProperty<Double> videoFrameRate = new SimpleObjectProperty<>(null);
 
-	/**
-	 * Returns the fileInProgress.
-	 *
-	 * @return fileInProgress
-	 */
 	public boolean isFileInProgress() {
+		return fileInProgress.get();
+	}
+
+	public BooleanProperty fileInProgressProperty() {
 		return fileInProgress;
 	}
 
-	/**
-	 * Sets the fileInProgress.
-	 *
-	 * @param fileInProgress
-	 * 		new value for fileInProgress
-	 */
 	public void setFileInProgress(boolean fileInProgress) {
-		this.fileInProgress = fileInProgress;
+		this.fileInProgress.set(fileInProgress);
 	}
 
 	public File getImage() {
