@@ -3,12 +3,14 @@ package net.packsam.geolocatefx;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import org.apache.commons.io.FilenameUtils;
@@ -233,7 +235,7 @@ public class GeolocateFx extends Application {
 		List<File> files = dialog.showOpenMultipleDialog(primaryStage);
 
 		if (files != null && !files.isEmpty()) {
-			files.forEach(this::addImage);
+			addImages(files);
 
 			String imageDirectory = files.get(0).getAbsoluteFile().getParent();
 			configuration.setLastImagePath(imageDirectory);
@@ -267,76 +269,117 @@ public class GeolocateFx extends Application {
 	 */
 	private void onFilesDropped(DroppedFilesEvent event) {
 		LatLong geolocation = event.getGeolocation();
-		if (geolocation == null) {
-			// only add to images list
-			event.getFiles().forEach(this::addImage);
-		} else {
-			// add to images list and immediately set geo location
-			event.getFiles().forEach(i -> addImage(i, geolocation));
-		}
+		addImages(event.getFiles(), event.getGeolocation());
 	}
 
 	/**
-	 * Adds the given image to the list of selected images.
+	 * Adds the given images to the list of selected images.
 	 *
-	 * @param imageFile
+	 * @param imageFiles
 	 * 		image file to add
 	 */
-	private void addImage(File imageFile) {
-		addImage(imageFile, null);
+	private void addImages(List<File> imageFiles) {
+		addImages(imageFiles, null);
 	}
 
 	/**
-	 * Adds the given image to the list of selected images.
+	 * Adds the given images to the list of selected images.
 	 *
-	 * @param imageFile
-	 * 		image file to add
+	 * @param imageFiles
+	 * 		image files to add
 	 * @param newGeolocation
 	 * 		optional new geolocation to write to file
 	 */
-	private void addImage(File imageFile, LatLong newGeolocation) {
-		if (imageFile == null) {
+	private void addImages(List<File> imageFiles, LatLong newGeolocation) {
+		if (imageFiles == null || imageFiles.isEmpty()) {
 			return;
 		}
+
 		ObservableList<ImageModel> selectedImages = model.getSelectedImages();
-		boolean alreadyAdded = selectedImages.stream()
+
+		// filter only new files
+		Set<File> existingFiles = selectedImages.stream()
 				.map(ImageModel::getImage)
-				.anyMatch(imageFile::equals);
-		if (alreadyAdded) {
-			return;
+				.collect(Collectors.toSet());
+		List<File> newImageFiles = imageFiles.stream()
+				.filter(((Predicate<File>) existingFiles::contains).negate())
+				.collect(Collectors.toList());
+
+		// handle images
+		List<ImageModel> imageIMs = newImageFiles.stream()
+				.filter(this::isImage)
+				.map(this::createImageModel)
+				.collect(Collectors.toList());
+
+		if (!imageIMs.isEmpty()) {
+			imageIMs.forEach(im -> es.submit(new CreateThumbnailTask(configuration.getConvertPath(), im)));
+			es.submit(new ReadMetaDataTask(configuration.getExiftoolPath(), imageIMs));
 		}
 
-		// check if this is an image or video
-		String extension = FilenameUtils.getExtension(imageFile.getName());
-		boolean isImage = StringUtils.equalsAnyIgnoreCase(extension, "jpg", "jpeg", "png", "tif", "tiff", "dng", "raw", "cr2", "cr3", "nef", "nrw", "arw", "srf", "sr2", "srw", "psd");
-		boolean isVideo = StringUtils.equalsAnyIgnoreCase(extension, "mp4", "mov", "m2ts", "avi");
+		// handle videos
+		List<ImageModel> videoIMs = newImageFiles.stream()
+				.filter(this::isVideo)
+				.map(this::createImageModel)
+				.collect(Collectors.toList());
 
-		if (!isImage && !isVideo) {
-			return;
+		if (!videoIMs.isEmpty()) {
+			videoIMs.forEach(im -> new ReadMetaDataAndCreateThumbnailTask(configuration.getExiftoolPath(), configuration.getConvertPath(), im));
 		}
 
-		// create image model
+		ArrayList<ImageModel> allIMs = new ArrayList<>();
+		allIMs.addAll(imageIMs);
+		allIMs.addAll(videoIMs);
+
+		if (newGeolocation != null && !allIMs.isEmpty()) {
+			es.submit(new WriteGeolocationTask(configuration.getExiftoolPath(), newGeolocation, allIMs));
+		}
+
+		selectedImages.addAll(allIMs);
+	}
+
+	/**
+	 * Creates an image model for the given file.
+	 *
+	 * @param file
+	 * 		file
+	 * @return new image model
+	 */
+	private ImageModel createImageModel(File file) {
 		ImageModel imageModel = new ImageModel();
-		imageModel.setImage(imageFile);
-		imageModel.setCreationDate(new Date(imageFile.lastModified()));
+		imageModel.setImage(file);
+		imageModel.setCreationDate(new Date(file.lastModified()));
 		try {
-			imageModel.setCreationDate(new Date(Files.readAttributes(imageFile.toPath(), BasicFileAttributes.class).creationTime().toMillis()));
+			imageModel.setCreationDate(new Date(Files.readAttributes(file.toPath(), BasicFileAttributes.class).creationTime().toMillis()));
 		} catch (Exception e) {
 		}
 
 		imageModel.creationDateProperty().addListener(this::onImageModelChanged);
 
-		if (isVideo) {
-			es.submit(new ReadMetaDataAndCreateThumbnailTask(configuration.getExiftoolPath(), configuration.getConvertPath(), imageModel));
-		} else {
-			es.submit(new CreateThumbnailTask(configuration.getConvertPath(), imageModel));
-			es.submit(new ReadMetaDataTask(configuration.getExiftoolPath(), imageModel));
-		}
-		if (newGeolocation != null) {
-			es.submit(new WriteGeolocationTask(configuration.getExiftoolPath(), newGeolocation, Collections.singletonList(imageModel)));
-		}
+		return imageModel;
+	}
 
-		selectedImages.add(imageModel);
+	/**
+	 * Checks if the given file is an image.
+	 *
+	 * @param file
+	 * 		file
+	 * @return <code>true</code> if this is an image
+	 */
+	private boolean isImage(File file) {
+		String extension = FilenameUtils.getExtension(file.getName());
+		return StringUtils.equalsAnyIgnoreCase(extension, "jpg", "jpeg", "png", "tif", "tiff", "dng", "raw", "cr2", "cr3", "nef", "nrw", "arw", "srf", "sr2", "srw", "psd");
+	}
+
+	/**
+	 * Checks if the given file is a video.
+	 *
+	 * @param file
+	 * 		file
+	 * @return <code>true</code> if this is a video
+	 */
+	private boolean isVideo(File file) {
+		String extension = FilenameUtils.getExtension(file.getName());
+		return StringUtils.equalsAnyIgnoreCase(extension, "mp4", "mov", "m2ts", "avi");
 	}
 
 	/**

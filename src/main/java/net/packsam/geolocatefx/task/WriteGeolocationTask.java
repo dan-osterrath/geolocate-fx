@@ -19,7 +19,7 @@ import net.packsam.geolocatefx.model.LatLong;
  *
  * @author osterrath
  */
-public class WriteGeolocationTask extends SynchronizedImageModelTask<LatLong> {
+public class WriteGeolocationTask extends SynchronizedImageModelTask<Void> {
 
 	/**
 	 * Path to exiftool.
@@ -62,7 +62,7 @@ public class WriteGeolocationTask extends SynchronizedImageModelTask<LatLong> {
 	 * 		an unhandled exception which occurred during the background operation
 	 */
 	@Override
-	protected LatLong call() throws Exception {
+	protected Void call() throws Exception {
 		// lock all image models in correct sort order to avoid dead locks
 		List<ImageModel> sortedImageModels = imageModels.stream()
 				.sorted(Comparator.comparing(ImageModel::getImage))
@@ -100,6 +100,6 @@ public class WriteGeolocationTask extends SynchronizedImageModelTask<LatLong> {
 		}
 
 		sortedImageModels.forEach(this::releaseImageModel);
-		return geolocation;
+		return null;
 	}
 }

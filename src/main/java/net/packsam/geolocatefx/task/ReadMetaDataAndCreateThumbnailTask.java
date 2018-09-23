@@ -1,5 +1,7 @@
 package net.packsam.geolocatefx.task;
 
+import java.util.Collections;
+
 import javafx.application.Platform;
 import net.packsam.geolocatefx.model.ImageModel;
 
@@ -58,7 +60,7 @@ public class ReadMetaDataAndCreateThumbnailTask extends SynchronizedImageModelTa
 		dummy.setImage(this.imageModel.getImage());
 
 		// read meta data
-		new ReadMetaDataTask(exiftoolPath, dummy, (geolocation, creationDate, duration, videoFrameRate) -> {
+		new ReadMetaDataTask(exiftoolPath, Collections.singletonList(dummy), (im, geolocation, creationDate, duration, videoFrameRate) -> {
 			dummy.setGeolocation(geolocation);
 			dummy.setCreationDate(creationDate);
 			dummy.setDuration(duration);

@@ -6,9 +6,17 @@ import java.io.InputStreamReader;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -22,6 +30,11 @@ import net.packsam.geolocatefx.model.LatLong;
  * @author osterrath
  */
 public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
+
+	/**
+	 * Pattern for the current file.
+	 */
+	private final static Pattern CURRENT_FILE_PATTERN = Pattern.compile("^========\\s+(.+)$");
 
 	/**
 	 * Pattern for searching latitude.
@@ -81,7 +94,7 @@ public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 	/**
 	 * Target image model.
 	 */
-	private final ImageModel imageModel;
+	private final Collection<ImageModel> imageModels;
 
 	/**
 	 * Callback when data has been parsed.
@@ -93,11 +106,11 @@ public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 	 *
 	 * @param exiftoolPath
 	 * 		path to exiftool
-	 * @param imageModel
-	 * 		target image model
+	 * @param imageModels
+	 * 		target image models
 	 */
-	public ReadMetaDataTask(String exiftoolPath, ImageModel imageModel) {
-		this(exiftoolPath, imageModel, null);
+	public ReadMetaDataTask(String exiftoolPath, Collection<ImageModel> imageModels) {
+		this(exiftoolPath, imageModels, null);
 	}
 
 	/**
@@ -105,14 +118,14 @@ public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 	 *
 	 * @param exiftoolPath
 	 * 		path to exiftool
-	 * @param imageModel
-	 * 		target image model
+	 * @param imageModels
+	 * 		target image models
 	 * @param callback
 	 * 		callback for saving parsed data
 	 */
-	public ReadMetaDataTask(String exiftoolPath, ImageModel imageModel, Callback callback) {
+	public ReadMetaDataTask(String exiftoolPath, Collection<ImageModel> imageModels, Callback callback) {
 		this.exiftoolPath = exiftoolPath;
-		this.imageModel = imageModel;
+		this.imageModels = new ArrayList<>(imageModels);
 		this.callback = callback;
 	}
 
@@ -127,29 +140,41 @@ public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 	 */
 	@Override
 	protected Void call() throws Exception {
-		lockImageModel(imageModel);
+		// lock all image models in correct sort order to avoid dead locks
+		List<ImageModel> sortedImageModels = imageModels.stream()
+				.sorted(Comparator.comparing(ImageModel::getImage))
+				.collect(Collectors.toList());
+		for (ImageModel imageModel : sortedImageModels) {
+			lockImageModel(imageModel);
+		}
 
-		File imageFile = imageModel.getImage();
+		// create map for fast lookup of image models
+		Map<String, ImageModel> imageModelMap = sortedImageModels.stream().collect(Collectors.toMap(im -> im.getImage().getAbsolutePath(), Function.identity(), (o1, o2) -> o1));
 
-		// call exiftool
+		// create command line
 		String exiftool = StringUtils.isNotEmpty(exiftoolPath) ? exiftoolPath : "exiftool";
-		ProcessBuilder processBuilder = new ProcessBuilder(
+		List<String> commandLine = new ArrayList<>(Arrays.asList(
 				exiftool,
 				"-S",
 				"-gpslatitude",
 				"-gpslongitude",
 				"-alldates",
 				"-duration",
-				"-videoframerate",
-				imageFile.getAbsolutePath()
-		);
-		Process process = processBuilder.start();
-		int returnValue = process.waitFor();
+				"-videoframerate"
+		));
+		sortedImageModels.stream()
+				.map(ImageModel::getImage)
+				.map(File::getAbsolutePath)
+				.forEach(commandLine::add);
 
-		if (returnValue != 0) {
-			releaseImageModel(imageModel);
-			return null;
+		ImageModel currentImageModel = null;
+		if (sortedImageModels.size() == 1) {
+			currentImageModel = sortedImageModels.get(0);
 		}
+
+		// call exiftool
+		ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
+		Process process = processBuilder.start();
 
 		// parse output
 		Double latitude = null;
@@ -162,7 +187,22 @@ public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 			String line;
 			while ((line = br.readLine()) != null) {
 				Matcher m;
-				if ((m = LATITUDE_PATTERN.matcher(line)).matches()) {
+				if ((m = CURRENT_FILE_PATTERN.matcher(line)).matches()) {
+					// next file starts
+					saveMetaData(
+							sortedImageModels,
+							currentImageModel,
+							latitude,
+							longitude,
+							creationDate,
+							creationDateOriginal,
+							duration,
+							videoFrameRate
+					);
+					String fileName = m.group(1);
+					fileName = fileName.replaceAll("/", Matcher.quoteReplacement(File.separator));
+					currentImageModel = imageModelMap.get(fileName);
+				} else if ((m = LATITUDE_PATTERN.matcher(line)).matches()) {
 					// parse latitude
 					latitude = parseDegrees(m.group(1), "N", "S");
 				} else if ((m = LONGITUDE_PATTERN.matcher(line)).matches()) {
@@ -185,25 +225,69 @@ public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 					videoFrameRate = parseDouble(m.group(1));
 				}
 			}
+
+			// finally save all data of last image
+			saveMetaData(
+					sortedImageModels,
+					currentImageModel,
+					latitude,
+					longitude,
+					creationDate,
+					creationDateOriginal,
+					duration,
+					videoFrameRate
+			);
 		}
 
-		LatLong finalGeolocation = latitude != null && longitude != null ? new LatLong(latitude, longitude) : null;
+		process.waitFor();
+
+		// release all images that have not been handled (should be none!)
+		sortedImageModels.forEach(this::releaseImageModel);
+
+		return null;
+	}
+
+	/**
+	 * Saves the parsed meta data to the given target image model
+	 *
+	 * @param imageModels
+	 * 		list of image models to remove image model from
+	 * @param targetImageModel
+	 * 		image model to save data to
+	 * @param latitude
+	 * 		geolocation latitude
+	 * @param longitude
+	 * 		geolocation longitude
+	 * @param creationDate
+	 * 		creation date
+	 * @param creationDateOriginal
+	 * 		original creation date
+	 * @param duration
+	 * 		video duration
+	 * @param videoFrameRate
+	 * 		video frame rate
+	 */
+	private void saveMetaData(List<ImageModel> imageModels, ImageModel targetImageModel, Double latitude, Double longitude, Date creationDate, Date creationDateOriginal, Double duration, Double videoFrameRate) {
+		if (targetImageModel == null) {
+			return;
+		}
+
+		LatLong geolocation = latitude != null && longitude != null ? new LatLong(latitude, longitude) : null;
 		Date finalCreationDate = creationDateOriginal != null ? creationDateOriginal : creationDate;
-		Double finalDuration = duration;
-		Double finalVideoFrameRate = videoFrameRate;
+
 		if (callback == null) {
 			Platform.runLater(() -> {
-				imageModel.setGeolocation(finalGeolocation);
-				imageModel.setCreationDate(finalCreationDate);
-				imageModel.setDuration(finalDuration);
-				imageModel.setVideoFrameRate(finalVideoFrameRate);
+				targetImageModel.setGeolocation(geolocation);
+				targetImageModel.setCreationDate(finalCreationDate);
+				targetImageModel.setDuration(duration);
+				targetImageModel.setVideoFrameRate(videoFrameRate);
 			});
 		} else {
-			callback.handleMetaData(finalGeolocation, finalCreationDate, finalDuration, finalVideoFrameRate);
+			callback.handleMetaData(targetImageModel, geolocation, finalCreationDate, duration, videoFrameRate);
 		}
 
-		releaseImageModel(imageModel);
-		return null;
+		releaseImageModel(targetImageModel);
+		imageModels.remove(targetImageModel);
 	}
 
 	/**
@@ -316,6 +400,8 @@ public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 		/**
 		 * Saves the parsed meta data.
 		 *
+		 * @param targetImageModel
+		 * 		image model to save data to
 		 * @param geolocation
 		 * 		geolocation
 		 * @param creationDate
@@ -325,7 +411,7 @@ public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 		 * @param videoFrameRate
 		 * 		video frame rate
 		 */
-		void handleMetaData(LatLong geolocation, Date creationDate, Double duration, Double videoFrameRate);
+		void handleMetaData(ImageModel targetImageModel, LatLong geolocation, Date creationDate, Double duration, Double videoFrameRate);
 	}
 
 }
