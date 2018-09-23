@@ -200,6 +200,27 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	}
 
 	/**
+	 * Event handler when the user clicked on an image.
+	 *
+	 * @param mouseEvent
+	 * 		mouse event
+	 */
+	@FXML
+	private void clickedOnImage(MouseEvent mouseEvent) {
+		Object source = mouseEvent.getSource();
+		if (source instanceof ImageThumbnail) {
+			ImageThumbnail imageThumbnail = (ImageThumbnail) source;
+			ImageModel imageModel = imageThumbnail.getImageModel();
+			if (imageModel != null) {
+				net.packsam.geolocatefx.model.LatLong geolocation = imageModel.getGeolocation();
+				if (geolocation != null) {
+					mapView.setCenter(geolocation.getLatitude(), geolocation.getLongitude());
+				}
+			}
+		}
+	}
+
+	/**
 	 * Event handler when the user started dragging an image.
 	 *
 	 * @param mouseEvent

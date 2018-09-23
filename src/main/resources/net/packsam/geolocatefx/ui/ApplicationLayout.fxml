@@ -43,7 +43,7 @@
 	<center>
 		<AnchorPane>
 			<HBox AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0" VBox.vgrow="ALWAYS">
-				<ImageThumbnailList fx:id="imageList" maxWidth="225.0" minWidth="225.0" prefWidth="225.0" onDragImageDetected="#dragDetectedOnImage"
+				<ImageThumbnailList fx:id="imageList" maxWidth="225.0" minWidth="225.0" prefWidth="225.0" onClickedOnImage="#clickedOnImage" onDragImageDetected="#dragDetectedOnImage"
 				                    onDragDropped="#dragDroppedOnImageList" onDragOver="#dragOverImageList" onGeolocationSet="#geolocationSetForImages" VBox.vgrow="ALWAYS"/>
 				<BorderPane fx:id="mapContainer" onDragDropped="#dragDroppedOnMap" onDragOver="#dragOverMap" HBox.hgrow="ALWAYS" VBox.vgrow="ALWAYS"/>
 			</HBox>

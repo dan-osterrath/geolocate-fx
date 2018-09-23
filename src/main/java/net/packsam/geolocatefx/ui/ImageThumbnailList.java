@@ -15,6 +15,11 @@ import net.packsam.geolocatefx.model.ImageModel;
  */
 public class ImageThumbnailList extends ListView<ImageModel> {
 	/**
+	 * Event handler when the user clicked on an image.
+	 */
+	private EventHandler<MouseEvent> onClickedOnImage;
+
+	/**
 	 * Event handler when the user started dragging an image.
 	 */
 	private EventHandler<MouseEvent> onDragImageDetected;
@@ -51,9 +56,22 @@ public class ImageThumbnailList extends ListView<ImageModel> {
 	 */
 	private ImageThumbnail createImage(ImageModel imageModel) {
 		ImageThumbnail imageThumbnail = new ImageThumbnail(imageModel);
+		imageThumbnail.setOnMouseClicked(this::clickedOnImage);
 		imageThumbnail.setOnDragDetected(this::dragDetectedOnImage);
 		imageThumbnail.setOnGeolocationSet(this::geolocationSetForImages);
 		return imageThumbnail;
+	}
+
+	/**
+	 * Event handler when the user clicked an image.
+	 *
+	 * @param mouseEvent
+	 * 		mouse event
+	 */
+	private void clickedOnImage(MouseEvent mouseEvent) {
+		if (onClickedOnImage != null) {
+			onClickedOnImage.handle(mouseEvent);
+		}
 	}
 
 	/**
@@ -78,6 +96,25 @@ public class ImageThumbnailList extends ListView<ImageModel> {
 		if (onGeolocationSet != null) {
 			onGeolocationSet.handle(setGeolocationEvent);
 		}
+	}
+
+	/**
+	 * Returns the onClickedOnImage.
+	 *
+	 * @return onClickedOnImage
+	 */
+	public EventHandler<MouseEvent> getOnClickedOnImage() {
+		return onClickedOnImage;
+	}
+
+	/**
+	 * Sets the onClickedOnImage.
+	 *
+	 * @param onClickedOnImage
+	 * 		new value for onClickedOnImage
+	 */
+	public void setOnClickedOnImage(EventHandler<MouseEvent> onClickedOnImage) {
+		this.onClickedOnImage = onClickedOnImage;
 	}
 
 	/**
