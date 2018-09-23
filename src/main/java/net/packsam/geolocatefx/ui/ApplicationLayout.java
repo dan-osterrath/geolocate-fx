@@ -430,6 +430,7 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	private void markerClicked(ImageModel imageModel) {
 		imageList.getSelectionModel().clearSelection();
 		imageList.getSelectionModel().select(imageModel);
+		imageList.scrollTo(imageModel);
 	}
 
 	/**
