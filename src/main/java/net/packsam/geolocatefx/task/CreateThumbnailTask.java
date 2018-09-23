@@ -6,7 +6,6 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import javafx.application.Platform;
-import javafx.concurrent.Task;
 import net.packsam.geolocatefx.Constants;
 import net.packsam.geolocatefx.model.ImageModel;
 
@@ -15,7 +14,7 @@ import net.packsam.geolocatefx.model.ImageModel;
  *
  * @author osterrath
  */
-public class CreateThumbnailTask extends Task<Void> {
+public class CreateThumbnailTask extends SynchronizedImageModelTask<Void> {
 
 	/**
 	 * Size parameter for convert -resize.
@@ -76,6 +75,7 @@ public class CreateThumbnailTask extends Task<Void> {
 	 */
 	@Override
 	protected Void call() throws Exception {
+		lockImageModel(imageModel);
 		File imageFile = imageModel.getImage();
 		File thumbnailFile = getThumbnailFile(imageFile);
 
@@ -107,6 +107,7 @@ public class CreateThumbnailTask extends Task<Void> {
 			int returnValue = process.waitFor();
 
 			if (returnValue != 0) {
+				releaseImageModel(imageModel);
 				return null;
 			}
 		}
@@ -118,7 +119,10 @@ public class CreateThumbnailTask extends Task<Void> {
 		} else {
 			callback.handleThumbnailFile(thumbnailFile);
 		}
+
+		releaseImageModel(imageModel);
 		return null;
+
 	}
 
 	/**

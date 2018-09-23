@@ -1,7 +1,6 @@
 package net.packsam.geolocatefx.task;
 
 import javafx.application.Platform;
-import javafx.concurrent.Task;
 import net.packsam.geolocatefx.model.ImageModel;
 
 /**
@@ -9,7 +8,7 @@ import net.packsam.geolocatefx.model.ImageModel;
  *
  * @author osterrath
  */
-public class ReadMetaDataAndCreateThumbnailTask extends Task<Void> {
+public class ReadMetaDataAndCreateThumbnailTask extends SynchronizedImageModelTask<Void> {
 	/**
 	 * Path to exiftool.
 	 */
@@ -52,6 +51,8 @@ public class ReadMetaDataAndCreateThumbnailTask extends Task<Void> {
 	 */
 	@Override
 	protected Void call() throws Exception {
+		lockImageModel(imageModel);
+
 		// create cloned image model
 		ImageModel dummy = new ImageModel();
 		dummy.setImage(this.imageModel.getImage());
@@ -76,6 +77,8 @@ public class ReadMetaDataAndCreateThumbnailTask extends Task<Void> {
 			imageModel.setThumbnail(dummy.getThumbnail());
 		});
 
+		releaseImageModel(imageModel);
 		return null;
 	}
+
 }

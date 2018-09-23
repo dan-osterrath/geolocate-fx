@@ -13,6 +13,11 @@ import javafx.beans.property.SimpleObjectProperty;
  */
 public class ImageModel {
 	/**
+	 * Flag if a current process is using this file.
+	 */
+	private boolean fileInProgress = false;
+
+	/**
 	 * Property for the (raw) image file.
 	 */
 	private final ObjectProperty<File> image = new SimpleObjectProperty<>(null);
@@ -41,6 +46,25 @@ public class ImageModel {
 	 * Property for the video frame rate.
 	 */
 	private final ObjectProperty<Double> videoFrameRate = new SimpleObjectProperty<>(null);
+
+	/**
+	 * Returns the fileInProgress.
+	 *
+	 * @return fileInProgress
+	 */
+	public boolean isFileInProgress() {
+		return fileInProgress;
+	}
+
+	/**
+	 * Sets the fileInProgress.
+	 *
+	 * @param fileInProgress
+	 * 		new value for fileInProgress
+	 */
+	public void setFileInProgress(boolean fileInProgress) {
+		this.fileInProgress = fileInProgress;
+	}
 
 	public File getImage() {
 		return image.get();

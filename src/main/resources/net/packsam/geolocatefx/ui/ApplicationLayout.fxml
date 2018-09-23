@@ -11,7 +11,7 @@
 <?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.VBox?>
 <?import net.packsam.geolocatefx.ui.ImageThumbnailList?>
-<BorderPane fx:id="rootPane" onDragDone="#dragDone" prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/8.0.121"
+<BorderPane fx:id="rootPane" onDragDone="#dragDone" onDragEntered="#dragEntered" onDragExited="#dragExited" prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/8.0.121"
             xmlns:fx="http://javafx.com/fxml/1" fx:controller="net.packsam.geolocatefx.ui.ApplicationLayout" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0"
             AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
 	<top>
@@ -43,7 +43,7 @@
 		<AnchorPane>
 			<HBox AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0" VBox.vgrow="ALWAYS">
 				<ImageThumbnailList fx:id="imageList" maxWidth="225.0" minWidth="225.0" onDragImageDetected="#dragDetectedOnImage"
-				                    onGeolocationSet="#geolocationSetForImages" prefWidth="225.0" VBox.vgrow="ALWAYS"/>
+				                    onGeolocationSet="#geolocationSetForImages" onDragDropped="#dragDroppedOnImageList" onDragOver="#dragOverImageList" prefWidth="225.0" VBox.vgrow="ALWAYS"/>
 				<BorderPane fx:id="mapContainer" onDragDropped="#dragDroppedOnMap" onDragOver="#dragOverMap" HBox.hgrow="ALWAYS" VBox.vgrow="ALWAYS"/>
 			</HBox>
 		</AnchorPane>

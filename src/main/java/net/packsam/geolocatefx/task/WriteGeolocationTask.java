@@ -4,12 +4,13 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
 
 import javafx.application.Platform;
-import javafx.concurrent.Task;
 import net.packsam.geolocatefx.model.ImageModel;
 import net.packsam.geolocatefx.model.LatLong;
 
@@ -18,7 +19,7 @@ import net.packsam.geolocatefx.model.LatLong;
  *
  * @author osterrath
  */
-public class WriteGeolocationTask extends Task<LatLong> {
+public class WriteGeolocationTask extends SynchronizedImageModelTask<LatLong> {
 
 	/**
 	 * Path to exiftool.
@@ -62,6 +63,14 @@ public class WriteGeolocationTask extends Task<LatLong> {
 	 */
 	@Override
 	protected LatLong call() throws Exception {
+		// lock all image models in correct sort order to avoid dead locks
+		List<ImageModel> sortedImageModels = imageModels.stream()
+				.sorted(Comparator.comparing(ImageModel::getImage))
+				.collect(Collectors.toList());
+		for (ImageModel imageModel : sortedImageModels) {
+			lockImageModel(imageModel);
+		}
+
 		// create command line
 		String exiftool = StringUtils.isNotEmpty(exiftoolPath) ? exiftoolPath : "exiftool";
 		List<String> commandLine = new ArrayList<>(Arrays.asList(
@@ -84,13 +93,13 @@ public class WriteGeolocationTask extends Task<LatLong> {
 		Process process = processBuilder.start();
 		int returnValue = process.waitFor();
 
-		if (returnValue != 0) {
-			return null;
+		if (returnValue == 0) {
+			Platform.runLater(() -> {
+				imageModels.forEach(im -> im.setGeolocation(geolocation));
+			});
 		}
 
-		Platform.runLater(() -> {
-			imageModels.forEach(im -> im.setGeolocation(geolocation));
-		});
+		sortedImageModels.forEach(this::releaseImageModel);
 		return geolocation;
 	}
 }

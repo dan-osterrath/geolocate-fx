@@ -34,12 +34,14 @@ import javafx.geometry.Point2D;
 import javafx.scene.Cursor;
 import javafx.scene.image.Image;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.DataFormat;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Pane;
+import net.packsam.geolocatefx.event.DroppedFilesEvent;
 import net.packsam.geolocatefx.event.SetGeolocationEvent;
 import net.packsam.geolocatefx.model.DragDropDataFormat;
 import net.packsam.geolocatefx.model.ImageModel;
@@ -64,6 +66,11 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	 * Event handler when the "Settings" button has been clicked.
 	 */
 	private EventHandler<ActionEvent> onOpenSettings;
+
+	/**
+	 * Event handler when the user has been dropped files from external application.
+	 */
+	private EventHandler<DroppedFilesEvent> onFilesDropped;
 
 	/**
 	 * Property for the list of images.
@@ -99,6 +106,11 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	private BorderPane mapContainer;
 
 	/**
+	 * Image for drag view.
+	 */
+	private Image dragView;
+
+	/**
 	 * Map view.
 	 */
 	private GoogleMapView mapView;
@@ -129,6 +141,8 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	 */
 	@Override
 	public void initialize(URL location, ResourceBundle resources) {
+		dragView = new Image(this.getClass().getResource("target.png").toExternalForm());
+
 		// initialize image lists
 		imageList.itemsProperty().bind(images);
 
@@ -193,7 +207,6 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	 */
 	@FXML
 	private void dragDetectedOnImage(MouseEvent mouseEvent) {
-
 		ObservableList<ImageModel> selectedImages = imageList.getSelectionModel().getSelectedItems();
 		if (selectedImages != null) {
 			List<File> selectedFiles = selectedImages.stream()
@@ -204,7 +217,6 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 
 			// set special cursor
 			mapView.setMouseTransparent(true);
-			Image dragView = new Image(this.getClass().getResource("target.png").toExternalForm());
 			db.setDragView(dragView);
 			db.setDragViewOffsetX(dragView.getWidth() / 2);
 			db.setDragViewOffsetY(dragView.getHeight() / 2);
@@ -220,20 +232,29 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	}
 
 	/**
-	 * Event handler when the user set geolocations for some images.
+	 * Event handler when the user starts dragging some objects from extern.
 	 *
-	 * @param setGeolocationEvent
-	 * 		event
+	 * @param dragEvent
+	 * 		drag event
 	 */
 	@FXML
-	private void geolocationSetForImages(SetGeolocationEvent setGeolocationEvent) {
-		if (onGeolocationSet != null) {
-			onGeolocationSet.handle(setGeolocationEvent);
-		}
+	private void dragEntered(DragEvent dragEvent) {
+		mapView.setMouseTransparent(true);
 	}
 
 	/**
-	 * Event handler when the user is dragging over root pane.
+	 * Event handler when the user leaves the scene while dragging.
+	 *
+	 * @param dragEvent
+	 * 		drag event
+	 */
+	@FXML
+	private void dragExited(DragEvent dragEvent) {
+		mapView.setMouseTransparent(false);
+	}
+
+	/**
+	 * Event handler when the user is dragging over map.
 	 *
 	 * @param dragEvent
 	 * 		drag event
@@ -241,10 +262,28 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	@FXML
 	private void dragOverMap(DragEvent dragEvent) {
 		Dragboard db = dragEvent.getDragboard();
-		List<File> images = (List<File>) db.getContent(DragDropDataFormat.ADD);
-		if (images != null && !images.isEmpty()) {
+
+		List<File> images;
+		if ((images = (List<File>) db.getContent(DragDropDataFormat.ADD)) != null && !images.isEmpty()) {
 			dragEvent.acceptTransferModes(TransferMode.MOVE);
-			mapView.setCursor(Cursor.NONE);
+		} else if ((images = (List<File>) db.getContent(DataFormat.FILES)) != null && !images.isEmpty()) {
+			dragEvent.acceptTransferModes(TransferMode.ANY);
+		}
+	}
+
+	/**
+	 * Event handler when the user is dragging over image list.
+	 *
+	 * @param dragEvent
+	 * 		drag event
+	 */
+	@FXML
+	private void dragOverImageList(DragEvent dragEvent) {
+		Dragboard db = dragEvent.getDragboard();
+
+		List<File> images;
+		if ((images = (List<File>) db.getContent(DataFormat.FILES)) != null && !images.isEmpty()) {
+			dragEvent.acceptTransferModes(TransferMode.ANY);
 		}
 	}
 
@@ -269,16 +308,50 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	 */
 	@FXML
 	private void dragDroppedOnMap(DragEvent dragEvent) {
-		Point2D p = mapContainer.sceneToLocal(dragEvent.getSceneX(), dragEvent.getSceneY());
-		LatLong latLong = map.fromPointToLatLng(p);
+		if (onGeolocationSet != null && onFilesDropped != null) {
+			Point2D p = mapContainer.sceneToLocal(dragEvent.getSceneX(), dragEvent.getSceneY());
+			LatLong latLong = map.fromPointToLatLng(p);
 
-		Dragboard db = dragEvent.getDragboard();
-		List<File> images = (List<File>) db.getContent(DragDropDataFormat.ADD);
-
-		if (onGeolocationSet != null) {
-			onGeolocationSet.handle(new SetGeolocationEvent(images, new net.packsam.geolocatefx.model.LatLong(latLong.getLatitude(), latLong.getLongitude())));
+			Dragboard db = dragEvent.getDragboard();
+			List<File> images;
+			if ((images = (List<File>) db.getContent(DragDropDataFormat.ADD)) != null && !images.isEmpty()) {
+				onGeolocationSet.handle(new SetGeolocationEvent(images, new net.packsam.geolocatefx.model.LatLong(latLong.getLatitude(), latLong.getLongitude())));
+			} else if ((images = (List<File>) db.getContent(DataFormat.FILES)) != null && !images.isEmpty()) {
+				onFilesDropped.handle(new DroppedFilesEvent(images, new net.packsam.geolocatefx.model.LatLong(latLong.getLatitude(), latLong.getLongitude())));
+			}
 		}
 		dragEvent.setDropCompleted(true);
+	}
+
+	/**
+	 * Event handler when dragging dropped over image list.
+	 *
+	 * @param dragEvent
+	 * 		drag event
+	 */
+	@FXML
+	private void dragDroppedOnImageList(DragEvent dragEvent) {
+		if (onFilesDropped != null) {
+			Dragboard db = dragEvent.getDragboard();
+			List<File> images;
+			if ((images = (List<File>) db.getContent(DataFormat.FILES)) != null && !images.isEmpty()) {
+				onFilesDropped.handle(new DroppedFilesEvent(images, null));
+			}
+		}
+		dragEvent.setDropCompleted(true);
+	}
+
+	/**
+	 * Event handler when the user set geolocations for some images.
+	 *
+	 * @param setGeolocationEvent
+	 * 		event
+	 */
+	@FXML
+	private void geolocationSetForImages(SetGeolocationEvent setGeolocationEvent) {
+		if (onGeolocationSet != null) {
+			onGeolocationSet.handle(setGeolocationEvent);
+		}
 	}
 
 	/**
@@ -484,6 +557,25 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 		this.onOpenSettings = onOpenSettings;
 	}
 
+	/**
+	 * Returns the onFilesDropped.
+	 *
+	 * @return onFilesDropped
+	 */
+	public EventHandler<DroppedFilesEvent> getOnFilesDropped() {
+		return onFilesDropped;
+	}
+
+	/**
+	 * Sets the onFilesDropped.
+	 *
+	 * @param onFilesDropped
+	 * 		new value for onFilesDropped
+	 */
+	public void setOnFilesDropped(EventHandler<DroppedFilesEvent> onFilesDropped) {
+		this.onFilesDropped = onFilesDropped;
+	}
+
 	public ObservableList<ImageModel> getImages() {
 		return images.get();
 	}
@@ -495,5 +587,4 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	public void setImages(ObservableList<ImageModel> images) {
 		this.images.set(images);
 	}
-
 }

@@ -1,6 +1,7 @@
 package net.packsam.geolocatefx;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -24,6 +25,7 @@ import javafx.stage.StageStyle;
 import net.packsam.geolocatefx.config.Configuration;
 import net.packsam.geolocatefx.config.ConfigurationIO;
 import net.packsam.geolocatefx.config.MapSetup;
+import net.packsam.geolocatefx.event.DroppedFilesEvent;
 import net.packsam.geolocatefx.event.SetGeolocationEvent;
 import net.packsam.geolocatefx.model.ApplicationModel;
 import net.packsam.geolocatefx.model.ImageModel;
@@ -135,6 +137,7 @@ public class GeolocateFx extends Application {
 			rootController = rootLoader.getController();
 			rootController.setOnOpenImages(this::onSelectImages);
 			rootController.setOnGeolocationSet(this::onGeolocationSet);
+			rootController.setOnFilesDropped(this::onFilesDropped);
 			rootController.setOnOpenSettings(this::onOpenSettings);
 			rootController.imagesProperty().bind(model.selectedImagesProperty());
 			rootController.initializeMap(configuration.getGoogleMapsApiKey(), lastPosition, lastZoom);
@@ -245,12 +248,41 @@ public class GeolocateFx extends Application {
 	}
 
 	/**
+	 * Event handler when the user dropped files from external application.
+	 *
+	 * @param event
+	 * 		event
+	 */
+	private void onFilesDropped(DroppedFilesEvent event) {
+		LatLong geolocation = event.getGeolocation();
+		if (geolocation == null) {
+			// only add to images list
+			event.getFiles().forEach(this::addImage);
+		} else {
+			// add to images list and immediately set geo location
+			event.getFiles().forEach(i -> addImage(i, geolocation));
+		}
+	}
+
+	/**
 	 * Adds the given image to the list of selected images.
 	 *
 	 * @param imageFile
 	 * 		image file to add
 	 */
 	private void addImage(File imageFile) {
+		addImage(imageFile, null);
+	}
+
+	/**
+	 * Adds the given image to the list of selected images.
+	 *
+	 * @param imageFile
+	 * 		image file to add
+	 * @param newGeolocation
+	 * 		optional new geolocation to write to file
+	 */
+	private void addImage(File imageFile, LatLong newGeolocation) {
 		if (imageFile == null) {
 			return;
 		}
@@ -262,9 +294,14 @@ public class GeolocateFx extends Application {
 			return;
 		}
 
-		// check if this is a video
+		// check if this is an image or video
 		String extension = FilenameUtils.getExtension(imageFile.getName());
+		boolean isImage = StringUtils.equalsAnyIgnoreCase(extension, "jpg", "jpeg", "png", "tif", "tiff", "dng", "raw", "cr2", "cr3", "nef", "nrw", "arw", "srf", "sr2", "srw", "psd");
 		boolean isVideo = StringUtils.equalsAnyIgnoreCase(extension, "mp4", "mov", "m2ts", "avi");
+
+		if (!isImage && !isVideo) {
+			return;
+		}
 
 		ImageModel imageModel = new ImageModel();
 		imageModel.setImage(imageFile);
@@ -274,6 +311,9 @@ public class GeolocateFx extends Application {
 		} else {
 			es.submit(new CreateThumbnailTask(configuration.getConvertPath(), imageModel));
 			es.submit(new ReadMetaDataTask(configuration.getExiftoolPath(), imageModel));
+		}
+		if (newGeolocation != null) {
+			es.submit(new WriteGeolocationTask(configuration.getExiftoolPath(), newGeolocation, Collections.singletonList(imageModel)));
 		}
 
 		selectedImages.add(imageModel);

@@ -9,7 +9,7 @@ import javafx.event.EventType;
 import net.packsam.geolocatefx.model.LatLong;
 
 /**
- * Event when a geolocation has been set for an image.
+ * Event when a geolocation has been set for some images.
  *
  * @author osterrath
  */
@@ -17,7 +17,7 @@ public class SetGeolocationEvent extends Event {
 	/**
 	 * Event type for setting a geo location.
 	 */
-	public final static EventType<SetGeolocationEvent> SET_GEOLOCATION = new EventType<>("SET GEOLOCATION");
+	private final static EventType<SetGeolocationEvent> SET_GEOLOCATION = new EventType<>("SET GEOLOCATION");
 
 	/**
 	 * Images to be updated.

@@ -13,7 +13,6 @@ import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
 
 import javafx.application.Platform;
-import javafx.concurrent.Task;
 import net.packsam.geolocatefx.model.ImageModel;
 import net.packsam.geolocatefx.model.LatLong;
 
@@ -22,7 +21,7 @@ import net.packsam.geolocatefx.model.LatLong;
  *
  * @author osterrath
  */
-public class ReadMetaDataTask extends Task<Void> {
+public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 
 	/**
 	 * Pattern for searching latitude.
@@ -128,6 +127,8 @@ public class ReadMetaDataTask extends Task<Void> {
 	 */
 	@Override
 	protected Void call() throws Exception {
+		lockImageModel(imageModel);
+
 		File imageFile = imageModel.getImage();
 
 		// call exiftool
@@ -146,6 +147,7 @@ public class ReadMetaDataTask extends Task<Void> {
 		int returnValue = process.waitFor();
 
 		if (returnValue != 0) {
+			releaseImageModel(imageModel);
 			return null;
 		}
 
@@ -199,6 +201,8 @@ public class ReadMetaDataTask extends Task<Void> {
 		} else {
 			callback.handleMetaData(finalGeolocation, finalCreationDate, finalDuration, finalVideoFrameRate);
 		}
+
+		releaseImageModel(imageModel);
 		return null;
 	}
 
