@@ -10,46 +10,42 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.VBox?>
-<?import net.packsam.geolocatefx.ui.DragIndicator?>
 <?import net.packsam.geolocatefx.ui.ImageThumbnailList?>
-<AnchorPane fx:id="rootPane" onDragDone="#dragDone" onDragOver="#dragOverRoot" prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/8.0.121"
-            xmlns:fx="http://javafx.com/fxml/1" fx:controller="net.packsam.geolocatefx.ui.ApplicationLayout">
-	<BorderPane AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
-		<top>
-			<ToolBar BorderPane.alignment="CENTER">
-				<Button onAction="#openImages" text="Open images / videos...">
-					<VBox.margin>
-						<Insets bottom="5.0" left="5.0" right="5.0" top="5.0"/>
-					</VBox.margin>
-					<graphic>
-						<ImageView fitHeight="16" fitWidth="16">
-							<Image url="@open-archive.png"/>
-						</ImageView>
-					</graphic>
-				</Button>
-				<Region HBox.hgrow="ALWAYS"/>
-				<Button onAction="#openSettings" text="Settings">
-					<VBox.margin>
-						<Insets bottom="5.0" left="5.0" right="5.0" top="5.0"/>
-					</VBox.margin>
-					<graphic>
-						<ImageView fitHeight="16" fitWidth="16">
-							<Image url="@two-gears.png"/>
-						</ImageView>
-					</graphic>
-				</Button>
-			</ToolBar>
-		</top>
-		<center>
-			<AnchorPane>
-				<HBox AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0" VBox.vgrow="ALWAYS">
-					<ImageThumbnailList fx:id="imageList" maxWidth="225.0" minWidth="225.0" onDragImageDetected="#dragDetectedOnImage"
-					                    onGeolocationSet="#geolocationSetForImages" prefWidth="225.0" VBox.vgrow="ALWAYS"/>
-					<BorderPane fx:id="mapContainer" onDragDropped="#dragDroppedOnMap" onDragOver="#dragOverMap" HBox.hgrow="ALWAYS" VBox.vgrow="ALWAYS"/>
-				</HBox>
-			</AnchorPane>
-		</center>
-	</BorderPane>
-
-	<DragIndicator fx:id="dragIndicator"/>
-</AnchorPane>
+<BorderPane fx:id="rootPane" onDragDone="#dragDone" prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/8.0.121"
+            xmlns:fx="http://javafx.com/fxml/1" fx:controller="net.packsam.geolocatefx.ui.ApplicationLayout" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0"
+            AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
+	<top>
+		<ToolBar BorderPane.alignment="CENTER">
+			<Button onAction="#openImages" text="Open images / videos...">
+				<VBox.margin>
+					<Insets bottom="5.0" left="5.0" right="5.0" top="5.0"/>
+				</VBox.margin>
+				<graphic>
+					<ImageView fitHeight="16" fitWidth="16">
+						<Image url="@open-archive.png"/>
+					</ImageView>
+				</graphic>
+			</Button>
+			<Region HBox.hgrow="ALWAYS"/>
+			<Button onAction="#openSettings" text="Settings">
+				<VBox.margin>
+					<Insets bottom="5.0" left="5.0" right="5.0" top="5.0"/>
+				</VBox.margin>
+				<graphic>
+					<ImageView fitHeight="16" fitWidth="16">
+						<Image url="@two-gears.png"/>
+					</ImageView>
+				</graphic>
+			</Button>
+		</ToolBar>
+	</top>
+	<center>
+		<AnchorPane>
+			<HBox AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0" VBox.vgrow="ALWAYS">
+				<ImageThumbnailList fx:id="imageList" maxWidth="225.0" minWidth="225.0" onDragImageDetected="#dragDetectedOnImage"
+				                    onGeolocationSet="#geolocationSetForImages" prefWidth="225.0" VBox.vgrow="ALWAYS"/>
+				<BorderPane fx:id="mapContainer" onDragDropped="#dragDroppedOnMap" onDragOver="#dragOverMap" HBox.hgrow="ALWAYS" VBox.vgrow="ALWAYS"/>
+			</HBox>
+		</AnchorPane>
+	</center>
+</BorderPane>

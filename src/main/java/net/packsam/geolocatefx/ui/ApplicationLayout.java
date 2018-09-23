@@ -31,6 +31,8 @@ import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Point2D;
+import javafx.scene.Cursor;
+import javafx.scene.image.Image;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.Dragboard;
@@ -97,12 +99,6 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	private BorderPane mapContainer;
 
 	/**
-	 * Drag icon indicator.
-	 */
-	@FXML
-	private DragIndicator dragIndicator;
-
-	/**
 	 * Map view.
 	 */
 	private GoogleMapView mapView;
@@ -133,9 +129,6 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	 */
 	@Override
 	public void initialize(URL location, ResourceBundle resources) {
-		// initialize drag'n'drop
-		dragIndicator.setVisible(false);
-
 		// initialize image lists
 		imageList.itemsProperty().bind(images);
 
@@ -200,9 +193,6 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	 */
 	@FXML
 	private void dragDetectedOnImage(MouseEvent mouseEvent) {
-		dragIndicator.setVisible(true);
-		dragIndicator.setPosition(mouseEvent.getSceneX(), mouseEvent.getSceneY());
-		mapView.setMouseTransparent(true);
 
 		ObservableList<ImageModel> selectedImages = imageList.getSelectionModel().getSelectedItems();
 		if (selectedImages != null) {
@@ -210,8 +200,17 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 					.map(ImageModel::getImage)
 					.collect(Collectors.toList());
 
+			Dragboard db = rootPane.startDragAndDrop(TransferMode.MOVE);
+
+			// set special cursor
+			mapView.setMouseTransparent(true);
+			Image dragView = new Image(this.getClass().getResource("target.png").toExternalForm());
+			db.setDragView(dragView);
+			db.setDragViewOffsetX(dragView.getWidth() / 2);
+			db.setDragViewOffsetY(dragView.getHeight() / 2);
+			rootPane.getScene().setCursor(Cursor.NONE);
+
 			// put image model in clipboard
-			Dragboard db = dragIndicator.startDragAndDrop(TransferMode.MOVE);
 			ClipboardContent content = new ClipboardContent();
 			content.put(DragDropDataFormat.ADD, selectedFiles);
 			db.setContent(content);
@@ -240,22 +239,12 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	 * 		drag event
 	 */
 	@FXML
-	private void dragOverRoot(DragEvent dragEvent) {
-		dragIndicator.setPosition(dragEvent.getSceneX(), dragEvent.getSceneY());
-	}
-
-	/**
-	 * Event handler when the user is dragging over root pane.
-	 *
-	 * @param dragEvent
-	 * 		drag event
-	 */
-	@FXML
 	private void dragOverMap(DragEvent dragEvent) {
 		Dragboard db = dragEvent.getDragboard();
 		List<File> images = (List<File>) db.getContent(DragDropDataFormat.ADD);
 		if (images != null && !images.isEmpty()) {
 			dragEvent.acceptTransferModes(TransferMode.MOVE);
+			mapView.setCursor(Cursor.NONE);
 		}
 	}
 
@@ -267,10 +256,9 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	 */
 	@FXML
 	private void dragDone(DragEvent dragEvent) {
-		dragIndicator.setVisible(false);
 		mapView.setMouseTransparent(false);
+		rootPane.getScene().setCursor(Cursor.DEFAULT);
 		dragEvent.consume();
-
 	}
 
 	/**
