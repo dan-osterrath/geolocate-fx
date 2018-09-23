@@ -1,7 +1,11 @@
 package net.packsam.geolocatefx;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -11,6 +15,7 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import javafx.application.Application;
+import javafx.beans.Observable;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXMLLoader;
@@ -44,6 +49,13 @@ import net.packsam.geolocatefx.ui.SettingsDialog;
  * @author osterrath
  */
 public class GeolocateFx extends Application {
+
+	/**
+	 * Comparator for sorting selected images.
+	 */
+	private final static Comparator<ImageModel> IMAGE_COMPARATOR = Comparator
+			.comparing(ImageModel::getCreationDate)
+			.thenComparing(ImageModel::getImage);
 
 	/**
 	 * IO system for loading / writing configuration.
@@ -303,8 +315,16 @@ public class GeolocateFx extends Application {
 			return;
 		}
 
+		// create image model
 		ImageModel imageModel = new ImageModel();
 		imageModel.setImage(imageFile);
+		imageModel.setCreationDate(new Date(imageFile.lastModified()));
+		try {
+			imageModel.setCreationDate(new Date(Files.readAttributes(imageFile.toPath(), BasicFileAttributes.class).creationTime().toMillis()));
+		} catch (Exception e) {
+		}
+
+		imageModel.creationDateProperty().addListener(this::onImageModelChanged);
 
 		if (isVideo) {
 			es.submit(new ReadMetaDataAndCreateThumbnailTask(configuration.getExiftoolPath(), configuration.getConvertPath(), imageModel));
@@ -348,6 +368,16 @@ public class GeolocateFx extends Application {
 			Alert alert = new ErrorAlert("Error", "Could not open settings dialog", e);
 			alert.showAndWait();
 		}
+	}
+
+	/**
+	 * Event handler when the image model data has been changed.
+	 *
+	 * @param observable
+	 * 		observable
+	 */
+	private void onImageModelChanged(Observable observable) {
+		model.selectedImagesProperty().sort(IMAGE_COMPARATOR);
 	}
 
 	/**
