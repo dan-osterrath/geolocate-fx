@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -109,8 +110,8 @@ public class GeolocateFx extends Application {
 	public GeolocateFx() {
 		configurationIO = new ConfigurationIO();
 		model = new ApplicationModel();
-		es = Executors.newFixedThreadPool(2);
-		ses = Executors.newSingleThreadScheduledExecutor();
+		es = Executors.newFixedThreadPool(2, new GroupedThreadFactory("background-tasks"));
+		ses = Executors.newSingleThreadScheduledExecutor(new GroupedThreadFactory("scheduled-tasks"));
 	}
 
 	/**
@@ -193,6 +194,7 @@ public class GeolocateFx extends Application {
 		try {
 			// stop all tasks
 			es.shutdownNow();
+			ses.shutdownNow();
 
 			// save last position
 			LatLong mapPosition = rootController.getMapPosition();
@@ -273,7 +275,7 @@ public class GeolocateFx extends Application {
 				.filter(im -> images.contains(im.getImage()))
 				.collect(Collectors.toList());
 
-		es.submit(new WriteGeolocationTask(configuration.getExiftoolPath(), event.getGeolocation(), imageModels));
+		scheduleTask(new WriteGeolocationTask(configuration.getExiftoolPath(), event.getGeolocation(), imageModels));
 	}
 
 	/**
@@ -506,6 +508,53 @@ public class GeolocateFx extends Application {
 	 */
 	public static void main(String[] args) {
 		launch(args);
+	}
+
+	/**
+	 * Internal thread factory that groups all created threads in an own thread group and sets the daemon flag to true.
+	 *
+	 * @author osterrath
+	 */
+	private class GroupedThreadFactory implements ThreadFactory {
+		/**
+		 * Thread group name.
+		 */
+		private final String threadGroupName;
+
+		/**
+		 * Thread group.
+		 */
+		private final ThreadGroup threadGroup;
+
+		/**
+		 * Counter for created threads.
+		 */
+		private long threadCounter = 0;
+
+		/**
+		 * Ctor.
+		 *
+		 * @param threadGroupName
+		 * 		thread group name.
+		 */
+		private GroupedThreadFactory(String threadGroupName) {
+			this.threadGroupName = threadGroupName;
+			threadGroup = new ThreadGroup(threadGroupName);
+		}
+
+		/**
+		 * Constructs a new {@code Thread}.  Implementations may also initialize priority, name, daemon status, {@code ThreadGroup}, etc.
+		 *
+		 * @param r
+		 * 		a runnable to be executed by new thread instance
+		 * @return constructed thread, or {@code null} if the request to create a thread is rejected
+		 */
+		@Override
+		public Thread newThread(Runnable r) {
+			Thread thread = new Thread(threadGroup, r, threadGroupName + "-" + (threadCounter++));
+			thread.setDaemon(true);
+			return thread;
+		}
 	}
 
 }
