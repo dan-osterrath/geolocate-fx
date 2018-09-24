@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.ResourceBundle;
 import java.util.stream.Collectors;
 
@@ -20,9 +21,13 @@ import com.lynden.gmapsfx.javascript.object.MapTypeIdEnum;
 import com.lynden.gmapsfx.javascript.object.Marker;
 import com.lynden.gmapsfx.javascript.object.MarkerOptions;
 
+import javafx.application.Platform;
 import javafx.beans.property.ListProperty;
+import javafx.beans.property.LongProperty;
 import javafx.beans.property.SimpleListProperty;
+import javafx.beans.property.SimpleLongProperty;
 import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
@@ -32,6 +37,7 @@ import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Point2D;
 import javafx.scene.Cursor;
+import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.DataFormat;
@@ -78,6 +84,11 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	private final ListProperty<ImageModel> images = new SimpleListProperty<>(FXCollections.observableArrayList());
 
 	/**
+	 * Prooperty for the number of background tasks in queue.
+	 */
+	private final LongProperty backgroundTaskCount = new SimpleLongProperty();
+
+	/**
 	 * Map for the change listener of the image models.
 	 */
 	private final Map<ImageModel, ChangeListener<net.packsam.geolocatefx.model.LatLong>> changeListenerMap = Collections.synchronizedMap(new HashMap<>());
@@ -104,6 +115,12 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	 */
 	@FXML
 	private BorderPane mapContainer;
+
+	/**
+	 * Label for the size of the background tasks.
+	 */
+	@FXML
+	private Label backgroundTaskCountLabel;
 
 	/**
 	 * Image for drag view.
@@ -148,6 +165,8 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 
 		// monitor changes on images
 		images.addListener(this::imageListChanged);
+
+		backgroundTaskCount.addListener(this::backgroundTaskCountChanged);
 
 		// disable all for now
 		rootPane.setDisable(true);
@@ -395,6 +414,31 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 	}
 
 	/**
+	 * Event handler when the number of background tasks have been changed.
+	 *
+	 * @param observableValue
+	 * 		observable value
+	 * @param oldVal
+	 * 		old value
+	 * @param newVal
+	 * 		new value
+	 */
+	private void backgroundTaskCountChanged(ObservableValue<? extends Number> observableValue, Number oldVal, Number newVal) {
+		if (Objects.equals(oldVal, newVal)) {
+			return;
+		}
+
+		Platform.runLater(() -> {
+			if (newVal == null || newVal.longValue() <= 0L) {
+				backgroundTaskCountLabel.setVisible(false);
+			} else {
+				backgroundTaskCountLabel.setVisible(true);
+				backgroundTaskCountLabel.setText(newVal + " files in progress");
+			}
+		});
+	}
+
+	/**
 	 * Observes changes of the image model and updates the map.
 	 *
 	 * @param imageModel
@@ -608,5 +652,17 @@ public class ApplicationLayout implements Initializable, MapComponentInitialized
 
 	public void setImages(ObservableList<ImageModel> images) {
 		this.images.set(images);
+	}
+
+	public long getBackgroundTaskCount() {
+		return backgroundTaskCount.get();
+	}
+
+	public LongProperty backgroundTaskCountProperty() {
+		return backgroundTaskCount;
+	}
+
+	public void setBackgroundTaskCount(long backgroundTaskCount) {
+		this.backgroundTaskCount.set(backgroundTaskCount);
 	}
 }

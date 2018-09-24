@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.mutable.MutableBoolean;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -77,12 +78,12 @@ public class GeolocateFx extends Application {
 	/**
 	 * Executor service for running background tasks.
 	 */
-	private final ExecutorService es;
+	private final ExecutorService backgroundTaskExecutorService;
 
 	/**
 	 * Executor service für scheduled tasks.
 	 */
-	private final ScheduledExecutorService ses;
+	private final ScheduledExecutorService scheduledExecutorService;
 
 	/**
 	 * Application configuration.
@@ -102,7 +103,12 @@ public class GeolocateFx extends Application {
 	/**
 	 * Flag if the image list has to be sorted.
 	 */
-	private boolean shouldSortImages = false;
+	private final MutableBoolean shouldSortImages = new MutableBoolean(false);
+
+	/**
+	 * Flag if the images in progress should be counted.
+	 */
+	private final MutableBoolean shouldCountTasks = new MutableBoolean(false);
 
 	/**
 	 * Ctor.
@@ -110,8 +116,8 @@ public class GeolocateFx extends Application {
 	public GeolocateFx() {
 		configurationIO = new ConfigurationIO();
 		model = new ApplicationModel();
-		es = Executors.newFixedThreadPool(2, new GroupedThreadFactory("background-tasks"));
-		ses = Executors.newSingleThreadScheduledExecutor(new GroupedThreadFactory("scheduled-tasks"));
+		backgroundTaskExecutorService = Executors.newFixedThreadPool(2, new GroupedThreadFactory("background-tasks"));
+		scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(new GroupedThreadFactory("scheduled-tasks"));
 	}
 
 	/**
@@ -193,8 +199,8 @@ public class GeolocateFx extends Application {
 	public void stop() throws Exception {
 		try {
 			// stop all tasks
-			es.shutdownNow();
-			ses.shutdownNow();
+			backgroundTaskExecutorService.shutdownNow();
+			scheduledExecutorService.shutdownNow();
 
 			// save last position
 			LatLong mapPosition = rootController.getMapPosition();
@@ -285,7 +291,6 @@ public class GeolocateFx extends Application {
 	 * 		event
 	 */
 	private void onFilesDropped(DroppedFilesEvent event) {
-		LatLong geolocation = event.getGeolocation();
 		addImages(event.getFiles(), event.getGeolocation());
 	}
 
@@ -371,6 +376,7 @@ public class GeolocateFx extends Application {
 		}
 
 		imageModel.creationDateProperty().addListener(this::onImageModelChanged);
+		imageModel.fileInProgressProperty().addListener(this::onImageModelInProgress);
 
 		return imageModel;
 	}
@@ -430,6 +436,17 @@ public class GeolocateFx extends Application {
 		}
 	}
 
+	private void scheduleOncePerSecond(MutableBoolean syncLock, Runnable command) {
+		synchronized (syncLock) {
+			if (syncLock.isTrue()) {
+				// already scheduled
+				return;
+			}
+			syncLock.setTrue();
+			scheduledExecutorService.schedule(command, 1, TimeUnit.SECONDS);
+		}
+	}
+
 	/**
 	 * Event handler when the image model data has been changed.
 	 *
@@ -437,24 +454,36 @@ public class GeolocateFx extends Application {
 	 * 		observable
 	 */
 	private void onImageModelChanged(Observable observable) {
-		synchronized (IMAGE_COMPARATOR) {
-			if (shouldSortImages) {
-				// already scheduled
-				return;
-			}
-			shouldSortImages = true;
-			ses.schedule(this::sortImages, 1, TimeUnit.SECONDS);
-		}
+		scheduleOncePerSecond(shouldSortImages, this::sortImages);
 	}
 
 	/**
 	 * Sorts the image list.
 	 */
 	private void sortImages() {
-		shouldSortImages = false;
-		Platform.runLater(() -> {
-			model.selectedImagesProperty().sort(IMAGE_COMPARATOR);
-		});
+		shouldSortImages.setFalse();
+		Platform.runLater(() -> model.selectedImagesProperty().sort(IMAGE_COMPARATOR));
+	}
+
+	/**
+	 * Event handler when the progress flag of the image model has been changed.
+	 *
+	 * @param observable
+	 * 		observable
+	 */
+	private void onImageModelInProgress(Observable observable) {
+		scheduleOncePerSecond(shouldCountTasks, this::countImagesInProgress);
+	}
+
+	/**
+	 * Counts the model images that are in progress.
+	 */
+	private void countImagesInProgress() {
+		shouldCountTasks.setFalse();
+		long imagesInProgress = model.selectedImagesProperty().stream()
+				.filter(ImageModel::isFileInProgress)
+				.count();
+		Platform.runLater(() -> rootController.setBackgroundTaskCount(imagesInProgress));
 	}
 
 	/**
@@ -465,7 +494,7 @@ public class GeolocateFx extends Application {
 	 */
 	private void scheduleTask(ExternalProcessTask<?> task) {
 		task.setErrorHandler(this::handleTaskError);
-		es.submit(task);
+		backgroundTaskExecutorService.submit(task);
 	}
 
 	/**
