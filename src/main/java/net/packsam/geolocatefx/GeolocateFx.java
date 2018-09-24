@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -17,6 +19,7 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.beans.Observable;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
@@ -38,6 +41,7 @@ import net.packsam.geolocatefx.model.ApplicationModel;
 import net.packsam.geolocatefx.model.ImageModel;
 import net.packsam.geolocatefx.model.LatLong;
 import net.packsam.geolocatefx.task.CreateThumbnailTask;
+import net.packsam.geolocatefx.task.ExternalProcessTask;
 import net.packsam.geolocatefx.task.ReadMetaDataAndCreateThumbnailTask;
 import net.packsam.geolocatefx.task.ReadMetaDataTask;
 import net.packsam.geolocatefx.task.WriteGeolocationTask;
@@ -75,6 +79,11 @@ public class GeolocateFx extends Application {
 	private final ExecutorService es;
 
 	/**
+	 * Executor service für scheduled tasks.
+	 */
+	private final ScheduledExecutorService ses;
+
+	/**
 	 * Application configuration.
 	 */
 	private Configuration configuration;
@@ -90,12 +99,18 @@ public class GeolocateFx extends Application {
 	private ApplicationLayout rootController;
 
 	/**
+	 * Flag if the image list has to be sorted.
+	 */
+	private boolean shouldSortImages = false;
+
+	/**
 	 * Ctor.
 	 */
 	public GeolocateFx() {
 		configurationIO = new ConfigurationIO();
 		model = new ApplicationModel();
 		es = Executors.newFixedThreadPool(2);
+		ses = Executors.newSingleThreadScheduledExecutor();
 	}
 
 	/**
@@ -312,8 +327,8 @@ public class GeolocateFx extends Application {
 				.collect(Collectors.toList());
 
 		if (!imageIMs.isEmpty()) {
-			imageIMs.forEach(im -> es.submit(new CreateThumbnailTask(configuration.getConvertPath(), im)));
-			es.submit(new ReadMetaDataTask(configuration.getExiftoolPath(), imageIMs));
+			imageIMs.forEach(im -> scheduleTask(new CreateThumbnailTask(configuration.getConvertPath(), im)));
+			scheduleTask(new ReadMetaDataTask(configuration.getExiftoolPath(), imageIMs));
 		}
 
 		// handle videos
@@ -323,7 +338,7 @@ public class GeolocateFx extends Application {
 				.collect(Collectors.toList());
 
 		if (!videoIMs.isEmpty()) {
-			videoIMs.forEach(im -> new ReadMetaDataAndCreateThumbnailTask(configuration.getExiftoolPath(), configuration.getConvertPath(), im));
+			videoIMs.forEach(im -> scheduleTask(new ReadMetaDataAndCreateThumbnailTask(configuration.getExiftoolPath(), configuration.getConvertPath(), im)));
 		}
 
 		ArrayList<ImageModel> allIMs = new ArrayList<>();
@@ -331,7 +346,7 @@ public class GeolocateFx extends Application {
 		allIMs.addAll(videoIMs);
 
 		if (newGeolocation != null && !allIMs.isEmpty()) {
-			es.submit(new WriteGeolocationTask(configuration.getExiftoolPath(), newGeolocation, allIMs));
+			scheduleTask(new WriteGeolocationTask(configuration.getExiftoolPath(), newGeolocation, allIMs));
 		}
 
 		selectedImages.addAll(allIMs);
@@ -420,7 +435,67 @@ public class GeolocateFx extends Application {
 	 * 		observable
 	 */
 	private void onImageModelChanged(Observable observable) {
-		model.selectedImagesProperty().sort(IMAGE_COMPARATOR);
+		synchronized (IMAGE_COMPARATOR) {
+			if (shouldSortImages) {
+				// already scheduled
+				return;
+			}
+			shouldSortImages = true;
+			ses.schedule(this::sortImages, 1, TimeUnit.SECONDS);
+		}
+	}
+
+	/**
+	 * Sorts the image list.
+	 */
+	private void sortImages() {
+		shouldSortImages = false;
+		Platform.runLater(() -> {
+			model.selectedImagesProperty().sort(IMAGE_COMPARATOR);
+		});
+	}
+
+	/**
+	 * Adds the given task to the internal scheduler and adds an error handler.
+	 *
+	 * @param task
+	 * 		task to execute
+	 */
+	private void scheduleTask(ExternalProcessTask<?> task) {
+		task.setErrorHandler(this::handleTaskError);
+		es.submit(task);
+	}
+
+	/**
+	 * Handles an erroneous exit code from task
+	 *
+	 * @param processName
+	 * 		process name that has been executed
+	 * @param exitCode
+	 * 		exit code
+	 * @param error
+	 * 		optional output from STDERR
+	 * @param e
+	 * 		optional exception when starting process
+	 */
+	private void handleTaskError(String processName, int exitCode, String error, Exception e) {
+		Platform.runLater(() -> {
+			Alert alert;
+			if (e != null) {
+				alert = new ErrorAlert(
+						"Error",
+						processName + " could not be started",
+						e
+				);
+			} else {
+				alert = new ErrorAlert(
+						"Error",
+						processName + " exited with error code " + exitCode,
+						error
+				);
+			}
+			alert.showAndWait();
+		});
 	}
 
 	/**

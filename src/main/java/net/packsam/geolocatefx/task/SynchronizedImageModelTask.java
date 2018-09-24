@@ -1,6 +1,5 @@
 package net.packsam.geolocatefx.task;
 
-import javafx.concurrent.Task;
 import net.packsam.geolocatefx.model.ImageModel;
 
 /**
@@ -8,8 +7,9 @@ import net.packsam.geolocatefx.model.ImageModel;
  *
  * @param <V>
  * 		return type of task
+ * @author osterrath
  */
-abstract class SynchronizedImageModelTask<V> extends Task<V> {
+public abstract class SynchronizedImageModelTask<V> extends ExternalProcessTask<V> {
 	/**
 	 * Locks the given image model or waits until
 	 *

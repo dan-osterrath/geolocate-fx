@@ -79,48 +79,51 @@ public class CreateThumbnailTask extends SynchronizedImageModelTask<Void> {
 		File imageFile = imageModel.getImage();
 		File thumbnailFile = getThumbnailFile(imageFile);
 
-		if (!(thumbnailFile.exists() && thumbnailFile.isFile() && thumbnailFile.canRead() && thumbnailFile.lastModified() >= imageFile.lastModified())) {
-			if (thumbnailFile.exists()) {
-				// thumb exists but seems to be too old
-				thumbnailFile.delete();
+		try {
+			if (!(thumbnailFile.exists() && thumbnailFile.isFile() && thumbnailFile.canRead() && thumbnailFile.lastModified() >= imageFile.lastModified())) {
+				if (thumbnailFile.exists()) {
+					// thumb exists but seems to be too old
+					thumbnailFile.delete();
+				}
+
+				String filename = imageFile.getAbsolutePath();
+				if (imageModel.getDuration() != null && imageModel.getDuration() > 0 && imageModel.getVideoFrameRate() != null && imageModel.getVideoFrameRate() > 0) {
+					// this seems to be a video, use frame in the middle of video
+					int totalFrames = (int) (imageModel.getDuration() * imageModel.getVideoFrameRate());
+					filename += "[" + (totalFrames >> 1) + "]";
+				}
+
+				// call convert
+				String convert = getProcessName();
+				ProcessBuilder processBuilder = new ProcessBuilder(
+						convert,
+						filename,
+						"-background", "white",
+						"-flatten",
+						"-thumbnail", RESIZE_DIMENSIONS_PARAM,
+						"-quality", "60%",
+						"jpg:" + thumbnailFile.getAbsolutePath()
+				);
+				Process process = startProcess(processBuilder);
+				int returnValue = waitForProcess(process);
+
+				if (returnValue != 0) {
+					return null;
+				}
 			}
 
-			String filename = imageFile.getAbsolutePath();
-			if (imageModel.getDuration() != null && imageModel.getDuration() > 0 && imageModel.getVideoFrameRate() != null && imageModel.getVideoFrameRate() > 0) {
-				// this seems to be a video, use frame in the middle of video
-				int totalFrames = (int) (imageModel.getDuration() * imageModel.getVideoFrameRate());
-				filename += "[" + (totalFrames >> 1) + "]";
+			if (callback == null) {
+				Platform.runLater(() -> {
+					imageModel.setThumbnail(thumbnailFile);
+				});
+			} else {
+				callback.handleThumbnailFile(thumbnailFile);
 			}
 
-			// call convert
-			String convert = StringUtils.isNotEmpty(convertPath) ? convertPath : "convert";
-			ProcessBuilder processBuilder = new ProcessBuilder(
-					convert,
-					filename,
-					"-background", "white",
-					"-flatten",
-					"-thumbnail", RESIZE_DIMENSIONS_PARAM,
-					"-quality", "60%",
-					"jpg:" + thumbnailFile.getAbsolutePath()
-			);
-			Process process = processBuilder.start();
-			int returnValue = process.waitFor();
-
-			if (returnValue != 0) {
-				releaseImageModel(imageModel);
-				return null;
-			}
+		} finally {
+			releaseImageModel(imageModel);
 		}
 
-		if (callback == null) {
-			Platform.runLater(() -> {
-				imageModel.setThumbnail(thumbnailFile);
-			});
-		} else {
-			callback.handleThumbnailFile(thumbnailFile);
-		}
-
-		releaseImageModel(imageModel);
 		return null;
 
 	}
@@ -143,6 +146,16 @@ public class CreateThumbnailTask extends SynchronizedImageModelTask<Void> {
 		thumbname.append(baseName);
 		thumbname.append(".thumb");
 		return new File(parent, thumbname.toString());
+	}
+
+	/**
+	 * Returns the process name that is being executed.
+	 *
+	 * @return process name
+	 */
+	@Override
+	String getProcessName() {
+		return StringUtils.isNotEmpty(convertPath) ? convertPath : "convert";
 	}
 
 	/**

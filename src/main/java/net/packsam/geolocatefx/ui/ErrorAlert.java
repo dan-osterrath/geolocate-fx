@@ -59,5 +59,38 @@ public class ErrorAlert extends Alert {
 		pane.add(textArea, 0, 1);
 		getDialogPane().setExpandableContent(pane);
 	}
+
+	/**
+	 * Ctor.
+	 *
+	 * @param title
+	 * 		alert title
+	 * @param headerText
+	 * 		alert header text
+	 * @param errorMessage
+	 * 		error message
+	 */
+	public ErrorAlert(String title, String headerText, String errorMessage) {
+		// initialize standard alert window
+		super(AlertType.ERROR);
+		setTitle(title);
+
+		setHeaderText(headerText);
+
+		// create label
+		Label label = new Label("Error message:");
+
+		// create text area for stack trace
+		TextArea textArea = new TextArea(errorMessage);
+		textArea.setEditable(false);
+		textArea.setWrapText(false);
+
+		// create grip pane for new components
+		GridPane pane = new GridPane();
+		pane.setMaxWidth(Double.MAX_VALUE);
+		pane.add(label, 0, 0);
+		pane.add(textArea, 0, 1);
+		getDialogPane().setExpandableContent(pane);
+	}
 }
 

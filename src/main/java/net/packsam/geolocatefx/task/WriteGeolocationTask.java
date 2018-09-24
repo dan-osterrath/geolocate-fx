@@ -1,6 +1,8 @@
 package net.packsam.geolocatefx.task;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -8,6 +10,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import javafx.application.Platform;
@@ -71,35 +74,61 @@ public class WriteGeolocationTask extends SynchronizedImageModelTask<Void> {
 			lockImageModel(imageModel);
 		}
 
-		// create command line
-		String exiftool = StringUtils.isNotEmpty(exiftoolPath) ? exiftoolPath : "exiftool";
-		List<String> commandLine = new ArrayList<>(Arrays.asList(
-				exiftool,
-				"-P",
-				"-overwrite_original",
-				"-q",
-				"-gpslatitude=" + Math.abs(geolocation.getLatitude()),
-				"-gpslatituderef=" + (geolocation.getLatitude() >= 0 ? "N" : "S"),
-				"-gpslongitude=" + Math.abs(geolocation.getLongitude()),
-				"-gpslongituderef=" + (geolocation.getLongitude() >= 0 ? "E" : "W")
-		));
-		imageModels.stream()
-				.map(ImageModel::getImage)
-				.map(File::getAbsolutePath)
-				.forEach(commandLine::add);
+		File tempFile = null;
+		try {
+			// create temp files as input for exiftool
+			List<String> inputFiles = sortedImageModels.stream()
+					.map(ImageModel::getImage)
+					.map(File::getAbsolutePath)
+					.collect(Collectors.toList());
 
-		// call exiftool
-		ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
-		Process process = processBuilder.start();
-		int returnValue = process.waitFor();
+			tempFile = File.createTempFile("GeolocateFX_exiftool", ".txt");
+			IOUtils.writeLines(inputFiles, System.lineSeparator(), new FileOutputStream(tempFile), Charset.defaultCharset());
 
-		if (returnValue == 0) {
-			Platform.runLater(() -> {
-				imageModels.forEach(im -> im.setGeolocation(geolocation));
-			});
+			// create command line
+			String exiftool = getProcessName();
+			List<String> commandLine = new ArrayList<>(Arrays.asList(
+					exiftool,
+					"-P",
+					"-overwrite_original",
+					"-q",
+					"-gpslatitude=" + Math.abs(geolocation.getLatitude()),
+					"-gpslatituderef=" + (geolocation.getLatitude() >= 0 ? "N" : "S"),
+					"-gpslongitude=" + Math.abs(geolocation.getLongitude()),
+					"-gpslongituderef=" + (geolocation.getLongitude() >= 0 ? "E" : "W"),
+					"-@",
+					tempFile.getAbsolutePath()
+			));
+
+			// call exiftool
+			ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
+			Process process = startProcess(processBuilder);
+			int returnValue = waitForProcess(process);
+
+			if (returnValue == 0) {
+				Platform.runLater(() -> {
+					imageModels.forEach(im -> im.setGeolocation(geolocation));
+				});
+			}
+
+		} finally {
+			sortedImageModels.forEach(this::releaseImageModel);
+
+			if (tempFile != null) {
+				tempFile.delete();
+			}
 		}
 
-		sortedImageModels.forEach(this::releaseImageModel);
 		return null;
+	}
+
+	/**
+	 * Returns the process name that is being executed.
+	 *
+	 * @return process name
+	 */
+	@Override
+	String getProcessName() {
+		return StringUtils.isNotEmpty(exiftoolPath) ? exiftoolPath : "exiftool";
 	}
 }

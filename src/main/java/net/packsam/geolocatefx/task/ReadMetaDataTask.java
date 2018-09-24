@@ -2,7 +2,9 @@ package net.packsam.geolocatefx.task;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.Charset;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -18,6 +20,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import javafx.application.Platform;
@@ -148,101 +151,122 @@ public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 			lockImageModel(imageModel);
 		}
 
-		// create map for fast lookup of image models
-		Map<String, ImageModel> imageModelMap = sortedImageModels.stream().collect(Collectors.toMap(im -> im.getImage().getAbsolutePath(), Function.identity(), (o1, o2) -> o1));
+		File tempFile = null;
+		try {
 
-		// create command line
-		String exiftool = StringUtils.isNotEmpty(exiftoolPath) ? exiftoolPath : "exiftool";
-		List<String> commandLine = new ArrayList<>(Arrays.asList(
-				exiftool,
-				"-S",
-				"-gpslatitude",
-				"-gpslongitude",
-				"-alldates",
-				"-duration",
-				"-videoframerate"
-		));
-		sortedImageModels.stream()
-				.map(ImageModel::getImage)
-				.map(File::getAbsolutePath)
-				.forEach(commandLine::add);
+			// create map for fast lookup of image models
+			Map<String, ImageModel> imageModelMap = sortedImageModels.stream().collect(Collectors.toMap(im -> im.getImage().getAbsolutePath(), Function.identity(), (o1, o2) -> o1));
 
-		ImageModel currentImageModel = null;
-		if (sortedImageModels.size() == 1) {
-			currentImageModel = sortedImageModels.get(0);
-		}
+			// create temp files as input for exiftool
+			List<String> inputFiles = sortedImageModels.stream()
+					.map(ImageModel::getImage)
+					.map(File::getAbsolutePath)
+					.collect(Collectors.toList());
 
-		// call exiftool
-		ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
-		Process process = processBuilder.start();
+			tempFile = File.createTempFile("GeolocateFX_exiftool", ".txt");
+			IOUtils.writeLines(inputFiles, System.lineSeparator(), new FileOutputStream(tempFile), Charset.defaultCharset());
 
-		// parse output
-		Double latitude = null;
-		Double longitude = null;
-		Date creationDateOriginal = null;
-		Date creationDate = null;
-		Double duration = null;
-		Double videoFrameRate = null;
-		try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-			String line;
-			while ((line = br.readLine()) != null) {
-				Matcher m;
-				if ((m = CURRENT_FILE_PATTERN.matcher(line)).matches()) {
-					// next file starts
-					saveMetaData(
-							sortedImageModels,
-							currentImageModel,
-							latitude,
-							longitude,
-							creationDate,
-							creationDateOriginal,
-							duration,
-							videoFrameRate
-					);
-					String fileName = m.group(1);
-					fileName = fileName.replaceAll("/", Matcher.quoteReplacement(File.separator));
-					currentImageModel = imageModelMap.get(fileName);
-				} else if ((m = LATITUDE_PATTERN.matcher(line)).matches()) {
-					// parse latitude
-					latitude = parseDegrees(m.group(1), "N", "S");
-				} else if ((m = LONGITUDE_PATTERN.matcher(line)).matches()) {
-					// parse longitude
-					longitude = parseDegrees(m.group(1), "E", "W");
-				} else if ((m = CREATION_DATE_ORIGINAL_PATTERN.matcher(line)).matches()) {
-					// parse original creation date
-					creationDateOriginal = parseDateTime(m.group(1));
-				} else if ((m = CREATION_DATE_PATTERN.matcher(line)).matches()) {
-					// parse creation date
-					creationDate = parseDateTime(m.group(1));
-				} else if ((m = DURATION_PATTERN_1.matcher(line)).matches()) {
-					// parse duration
-					duration = parseDouble(m.group(1));
-				} else if ((m = DURATION_PATTERN_2.matcher(line)).matches()) {
-					// parse duration
-					duration = parseTime(m.group(1));
-				} else if ((m = VIDEO_FRAME_RATE_PATTERN.matcher(line)).matches()) {
-					// parse video frame rate
-					videoFrameRate = parseDouble(m.group(1));
-				}
+			// create command line
+			String exiftool = getProcessName();
+			List<String> commandLine = new ArrayList<>(Arrays.asList(
+					exiftool,
+					"-S",
+					"-gpslatitude",
+					"-gpslongitude",
+					"-alldates",
+					"-duration",
+					"-videoframerate",
+					"-@",
+					tempFile.getAbsolutePath()
+			));
+
+			ImageModel currentImageModel = null;
+			if (sortedImageModels.size() == 1) {
+				currentImageModel = sortedImageModels.get(0);
 			}
 
-			// finally save all data of last image
-			saveMetaData(
-					sortedImageModels,
-					currentImageModel,
-					latitude,
-					longitude,
-					creationDate,
-					creationDateOriginal,
-					duration,
-					videoFrameRate
-			);
+			// call exiftool
+			ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
+			Process process = startProcess(processBuilder);
+
+			// parse output
+			Double latitude = null;
+			Double longitude = null;
+			Date creationDateOriginal = null;
+			Date creationDate = null;
+			Double duration = null;
+			Double videoFrameRate = null;
+			try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+				String line;
+				while ((line = br.readLine()) != null || process.isAlive()) {
+					if (line == null) {
+						// process is still running but no more output yet -> wait shortly
+						Thread.sleep(100);
+						continue;
+					}
+					Matcher m;
+					if ((m = CURRENT_FILE_PATTERN.matcher(line)).matches()) {
+						// next file starts
+						saveMetaData(
+								sortedImageModels,
+								currentImageModel,
+								latitude,
+								longitude,
+								creationDate,
+								creationDateOriginal,
+								duration,
+								videoFrameRate
+						);
+						String fileName = m.group(1);
+						fileName = fileName.replaceAll("/", Matcher.quoteReplacement(File.separator));
+						currentImageModel = imageModelMap.get(fileName);
+					} else if ((m = LATITUDE_PATTERN.matcher(line)).matches()) {
+						// parse latitude
+						latitude = parseDegrees(m.group(1), "N", "S");
+					} else if ((m = LONGITUDE_PATTERN.matcher(line)).matches()) {
+						// parse longitude
+						longitude = parseDegrees(m.group(1), "E", "W");
+					} else if ((m = CREATION_DATE_ORIGINAL_PATTERN.matcher(line)).matches()) {
+						// parse original creation date
+						creationDateOriginal = parseDateTime(m.group(1));
+					} else if ((m = CREATION_DATE_PATTERN.matcher(line)).matches()) {
+						// parse creation date
+						creationDate = parseDateTime(m.group(1));
+					} else if ((m = DURATION_PATTERN_1.matcher(line)).matches()) {
+						// parse duration
+						duration = parseDouble(m.group(1));
+					} else if ((m = DURATION_PATTERN_2.matcher(line)).matches()) {
+						// parse duration
+						duration = parseTime(m.group(1));
+					} else if ((m = VIDEO_FRAME_RATE_PATTERN.matcher(line)).matches()) {
+						// parse video frame rate
+						videoFrameRate = parseDouble(m.group(1));
+					}
+				}
+
+				// finally save all data of last image
+				saveMetaData(
+						sortedImageModels,
+						currentImageModel,
+						latitude,
+						longitude,
+						creationDate,
+						creationDateOriginal,
+						duration,
+						videoFrameRate
+				);
+			}
+
+			waitForProcess(process);
+
+		} finally {
+			// release all images that have not been handled (should be none!)
+			sortedImageModels.forEach(this::releaseImageModel);
+
+			if (tempFile != null) {
+				tempFile.delete();
+			}
 		}
-
-		process.waitFor();
-
-		// release all images that have not been handled (should be none!)
-		sortedImageModels.forEach(this::releaseImageModel);
 
 		return null;
 	}
@@ -388,6 +412,16 @@ public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 		} catch (NumberFormatException e) {
 			return null;
 		}
+	}
+
+	/**
+	 * Returns the process name that is being executed.
+	 *
+	 * @return process name
+	 */
+	@Override
+	String getProcessName() {
+		return StringUtils.isNotEmpty(exiftoolPath) ? exiftoolPath : "exiftool";
 	}
 
 	/**

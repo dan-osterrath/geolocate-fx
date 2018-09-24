@@ -60,15 +60,19 @@ public class ReadMetaDataAndCreateThumbnailTask extends SynchronizedImageModelTa
 		dummy.setImage(this.imageModel.getImage());
 
 		// read meta data
-		new ReadMetaDataTask(exiftoolPath, Collections.singletonList(dummy), (im, geolocation, creationDate, duration, videoFrameRate) -> {
+		ReadMetaDataTask task1 = new ReadMetaDataTask(exiftoolPath, Collections.singletonList(dummy), (im, geolocation, creationDate, duration, videoFrameRate) -> {
 			dummy.setGeolocation(geolocation);
 			dummy.setCreationDate(creationDate);
 			dummy.setDuration(duration);
 			dummy.setVideoFrameRate(videoFrameRate);
-		}).call();
+		});
+		task1.setErrorHandler(getErrorHandler());
+		task1.call();
 
 		// create thumbnail
-		new CreateThumbnailTask(convertPath, dummy, dummy::setThumbnail).call();
+		CreateThumbnailTask task2 = new CreateThumbnailTask(convertPath, dummy, dummy::setThumbnail);
+		task2.setErrorHandler(getErrorHandler());
+		task2.call();
 
 		// copy all data to original image model
 		Platform.runLater(() -> {
@@ -83,4 +87,13 @@ public class ReadMetaDataAndCreateThumbnailTask extends SynchronizedImageModelTa
 		return null;
 	}
 
+	/**
+	 * Returns the process name that is being executed.
+	 *
+	 * @return process name
+	 */
+	@Override
+	String getProcessName() {
+		return null;
+	}
 }
