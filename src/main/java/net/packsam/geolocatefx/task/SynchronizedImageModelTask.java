@@ -1,5 +1,10 @@
 package net.packsam.geolocatefx.task;
 
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import net.packsam.geolocatefx.model.ImageModel;
 
 /**
@@ -11,7 +16,7 @@ import net.packsam.geolocatefx.model.ImageModel;
  */
 public abstract class SynchronizedImageModelTask<V> extends ExternalProcessTask<V> {
 	/**
-	 * Locks the given image model or waits until
+	 * Locks the given image model or waits until it is unlocked.
 	 *
 	 * @param imageModel
 	 * 		image model to lock
@@ -25,6 +30,27 @@ public abstract class SynchronizedImageModelTask<V> extends ExternalProcessTask<
 			}
 			imageModel.setFileInProgress(true);
 		}
+	}
+
+	/**
+	 * Locks the given image models or waits until they are unlocked.
+	 *
+	 * @param imageModels
+	 * 		image model to lock
+	 * @return sorted list of image models
+	 * @throws InterruptedException
+	 * 		thread got interrupted
+	 */
+	List<ImageModel> lockImageModels(Collection<ImageModel> imageModels) throws InterruptedException {
+		// lock all image models in correct sort order to avoid dead locks
+		List<ImageModel> sortedImageModels = imageModels.stream()
+				.sorted(Comparator.comparing(ImageModel::getImage))
+				.collect(Collectors.toList());
+		for (ImageModel imageModel : sortedImageModels) {
+			lockImageModel(imageModel);
+		}
+
+		return sortedImageModels;
 	}
 
 	/**

@@ -1,16 +1,13 @@
 package net.packsam.geolocatefx.task;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import javafx.application.Platform;
@@ -66,13 +63,7 @@ public class WriteGeolocationTask extends SynchronizedImageModelTask<Void> {
 	 */
 	@Override
 	protected Void call() throws Exception {
-		// lock all image models in correct sort order to avoid dead locks
-		List<ImageModel> sortedImageModels = imageModels.stream()
-				.sorted(Comparator.comparing(ImageModel::getImage))
-				.collect(Collectors.toList());
-		for (ImageModel imageModel : sortedImageModels) {
-			lockImageModel(imageModel);
-		}
+		List<ImageModel> sortedImageModels = lockImageModels(imageModels);
 
 		File tempFile = null;
 		try {
@@ -83,7 +74,7 @@ public class WriteGeolocationTask extends SynchronizedImageModelTask<Void> {
 					.collect(Collectors.toList());
 
 			tempFile = File.createTempFile("GeolocateFX_exiftool", ".txt");
-			IOUtils.writeLines(inputFiles, System.lineSeparator(), new FileOutputStream(tempFile), Charset.defaultCharset());
+			FileUtils.writeLines(tempFile, inputFiles);
 
 			// create command line
 			String exiftool = getProcessName();
