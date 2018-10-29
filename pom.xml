@@ -13,6 +13,8 @@
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<java.version>1.8</java.version>
 		<app.name>GeolocateFx</app.name>
+		<app.mainClass>net.packsam.geolocatefx.GeolocateFx</app.mainClass>
+		<app.author>Dan Osterrath</app.author>
 	</properties>
 
 	<dependencies>
@@ -31,7 +33,6 @@
 			<artifactId>GMapsFX</artifactId>
 			<version>2.12.2-SNAPSHOT</version>
 		</dependency>
-
 	</dependencies>
 
 	<build>
@@ -45,7 +46,27 @@
 					<compilerVersion>${java.version}</compilerVersion>
 				</configuration>
 			</plugin>
-
+			<plugin>
+				<artifactId>maven-jar-plugin</artifactId>
+				<version>3.1.0</version>
+				<configuration>
+					<archive>
+						<manifest>
+							<addClasspath>true</addClasspath>
+							<mainClass>${app.mainClass}</mainClass>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>1.6.0</version>
+				<configuration>
+					<mainClass>${app.mainClass}</mainClass>
+				</configuration>
+			</plugin>
+			
 			<!-- build native app -->
 			<plugin>
 				<groupId>com.zenjava</groupId>
@@ -68,8 +89,8 @@
 					</execution>
 				</executions>
 				<configuration>
-					<mainClass>net.packsam.geolocatefx.GeolocateFx</mainClass>
-					<vendor>Dan Osterrath</vendor>
+					<mainClass>${app.mainClass}</mainClass>
+					<vendor>${app.author}</vendor>
 					<appName>${app.name}</appName>
 					<bundleArguments>
 						<icon>${basedir}/src/main/resources/net/packsam/geolocatefx/AppIcon.ico</icon>
