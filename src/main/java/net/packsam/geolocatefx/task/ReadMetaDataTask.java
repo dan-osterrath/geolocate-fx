@@ -2,7 +2,10 @@ package net.packsam.geolocatefx.task;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -211,6 +214,12 @@ public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 						String fileName = m.group(1);
 						fileName = fileName.replaceAll("/", Matcher.quoteReplacement(File.separator));
 						currentImageModel = imageModelMap.get(fileName);
+						latitude = null;
+						longitude = null;
+						creationDateOriginal = null;
+						creationDate = null;
+						duration = null;
+						videoFrameRate = null;
 					} else if ((m = LATITUDE_PATTERN.matcher(line)).matches()) {
 						// parse latitude
 						latitude = parseDegrees(m.group(1), "N", "S");
@@ -288,7 +297,16 @@ public class ReadMetaDataTask extends SynchronizedImageModelTask<Void> {
 		}
 
 		LatLong geolocation = latitude != null && longitude != null ? new LatLong(latitude, longitude) : null;
-		Date finalCreationDate = creationDateOriginal != null ? creationDateOriginal : creationDate;
+		Date fileCreationDate = null;
+		if (creationDate == null && creationDateOriginal == null) {
+			// file has no creation date
+			try {
+				BasicFileAttributes fileAttrs = Files.readAttributes(targetImageModel.getImage().toPath(), BasicFileAttributes.class);
+				fileCreationDate = new Date(fileAttrs.creationTime().toMillis());
+			} catch (IOException e) {
+			}
+		}
+		Date finalCreationDate = creationDateOriginal != null ? creationDateOriginal : (creationDate != null ? creationDate : fileCreationDate);
 
 		if (callback == null) {
 			Platform.runLater(() -> {
